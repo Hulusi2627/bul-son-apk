@@ -1,0 +1,2529 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Pro-Bul</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#FF5C1A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pro-Bul">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --orange:#FF5C1A;--yellow:#FFD234;--dark:#0F0E0D;--dark2:#1C1A18;
+  --card:#242220;--card2:#2e2b28;--text:#F5F0E8;--muted:#9A9286;
+  --border:rgba(255,255,255,0.08);--green:#2a9d5c;--red:#e05050;--blue:#4da6ff;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--dark);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.bg-decor{position:fixed;inset:0;pointer-events:none;z-index:0;}
+.bg-blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.15;}
+.bg-blob-1{width:400px;height:400px;background:var(--orange);top:-100px;right:-100px;animation:drift 8s ease-in-out infinite alternate;}
+.bg-blob-2{width:300px;height:300px;background:var(--yellow);bottom:-80px;left:-80px;animation:drift 10s ease-in-out infinite alternate-reverse;}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);background-size:40px 40px;}
+@keyframes drift{from{transform:translate(0,0)scale(1)}to{transform:translate(30px,20px)scale(1.1)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+@keyframes popIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.3)}}
+
+/* PHONE */
+.phone{position:relative;z-index:1;width:390px;height:844px;background:var(--dark2);border-radius:44px;border:1.5px solid var(--border);box-shadow:0 60px 120px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.04),inset 0 1px 0 rgba(255,255,255,0.06);overflow:hidden;display:flex;flex-direction:column;position:relative;}
+.notch{width:120px;height:34px;background:var(--dark);border-radius:0 0 20px 20px;margin:0 auto;flex-shrink:0;}
+.statusbar{display:flex;justify-content:space-between;align-items:center;padding:10px 28px 8px;font-size:12px;font-weight:600;color:var(--text);flex-shrink:0;}
+.statusbar-time{font-family:'Syne',sans-serif;font-weight:700;}
+.statusbar-icons{display:flex;gap:6px;align-items:center;}
+.signal-bar{display:flex;gap:2px;align-items:flex-end;}
+.signal-bar span{background:var(--text);border-radius:1px;width:3px;}
+.signal-bar span:nth-child(1){height:4px}.signal-bar span:nth-child(2){height:7px}.signal-bar span:nth-child(3){height:10px}
+.battery{width:22px;height:11px;border:1.5px solid var(--text);border-radius:2px;position:relative;display:flex;align-items:center;padding:2px;}
+.battery::after{content:'';position:absolute;right:-4px;width:2px;height:5px;background:var(--text);border-radius:1px;}
+.battery-fill{background:var(--text);height:100%;width:70%;border-radius:1px;}
+
+/* SCREENS */
+.screen{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;transition:opacity 0.3s,transform 0.3s;}
+.screen.hidden{opacity:0;pointer-events:none;transform:translateY(16px);}
+/* overlay'ler screen transition'dan etkilenmesin */
+#badge-unlock-overlay,#player-modal-overlay,#rating-overlay{transition:none!important;}
+.screen-top{padding-top:78px;} /* below notch+statusbar */
+
+/* SHARED COMPONENTS */
+.input-label{font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted);margin-bottom:7px;display:block;}
+.input-wrapper{position:relative;display:flex;align-items:center;}
+.input-icon{position:absolute;left:16px;font-size:16px;opacity:0.5;pointer-events:none;}
+.input-field{width:100%;padding:13px 16px 13px 44px;background:var(--card);border:1.5px solid var(--border);border-radius:16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;outline:none;transition:border-color 0.2s,box-shadow 0.2s;}
+.input-field::placeholder{color:var(--muted);}
+.input-field:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,92,26,0.12);}
+.input-field.error{border-color:var(--red);box-shadow:0 0 0 3px rgba(224,80,80,0.12);animation:shake 0.4s ease;}
+.input-field.success{border-color:var(--green);}
+.input-field.has-toggle{padding-right:46px;}
+.input-toggle{position:absolute;right:14px;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;}
+.field-error{font-size:11px;color:var(--red);margin-top:5px;padding-left:4px;display:none;}
+.field-error.show{display:block;animation:fadeIn 0.2s ease;}
+.btn-primary{width:100%;padding:16px;background:var(--orange);border:none;border-radius:18px;color:white;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;position:relative;overflow:hidden;transition:transform 0.15s,box-shadow 0.15s;box-shadow:0 12px 32px rgba(255,92,26,0.35);display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-primary::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.15),transparent);border-radius:inherit;}
+.btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 16px 40px rgba(255,92,26,0.45);}
+.btn-primary:disabled{cursor:not-allowed;}
+.back-btn{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px;display:flex;align-items:center;gap:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:15px;}
+
+/* BOTTOM NAV */
+.bottom-nav{position:absolute;bottom:0;left:0;right:0;height:72px;background:rgba(28,26,24,0.95);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;padding:0 10px 8px;z-index:50;backdrop-filter:blur(10px);}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:8px 16px;border-radius:12px;flex:1;border:none;background:transparent;transition:background 0.2s;}
+.nav-item.active .nav-icon,.nav-item.active .nav-label{color:var(--orange);}
+.nav-icon{font-size:20px;color:var(--muted);line-height:1;}
+.nav-label{font-size:10px;color:var(--muted);font-weight:600;font-family:'Syne',sans-serif;}
+
+/* FAB */
+.fab{position:absolute;bottom:80px;right:24px;width:56px;height:56px;background:var(--orange);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;box-shadow:0 8px 24px rgba(255,92,26,0.45);border:none;color:white;z-index:51;transition:transform 0.2s;}
+.fab:hover{transform:scale(1.08) rotate(10deg);}
+
+/* TOAST */
+.toast{position:absolute;top:78px;left:20px;right:20px;background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;z-index:200;animation:fadeUp 0.3s ease;box-shadow:0 8px 24px rgba(0,0,0,0.4);transition:opacity 0.3s;}
+.toast.success{border-color:rgba(42,157,92,0.3);}
+.toast.error{border-color:rgba(224,80,80,0.3);}
+
+/* ==================== AUTH ==================== */
+#screen-auth{background:var(--dark2);overflow-y:auto;overflow-x:hidden;}
+#screen-auth::-webkit-scrollbar{display:none;}
+.auth-inner{padding:78px 28px 40px;display:flex;flex-direction:column;min-height:100%;}
+.logo-row{display:flex;align-items:center;gap:10px;animation:fadeUp 0.6s ease both;}
+.logo-icon{width:46px;height:46px;background:var(--orange);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 8px 24px rgba(255,92,26,0.4);}
+.logo-text{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;}
+.logo-text span{color:var(--orange);}
+.hero-tagline{margin-top:16px;font-family:'Syne',sans-serif;font-size:28px;font-weight:700;line-height:1.15;animation:fadeUp 0.6s 0.1s ease both;}
+.hero-tagline em{font-style:normal;color:var(--orange);}
+.hero-sub{margin-top:7px;font-size:13px;color:var(--muted);line-height:1.5;animation:fadeUp 0.6s 0.2s ease both;}
+.tabs{display:flex;background:var(--card);border-radius:16px;padding:4px;margin:18px 0;border:1px solid var(--border);animation:fadeUp 0.6s 0.25s ease both;position:sticky;top:78px;z-index:10;}
+.tab-btn{flex:1;padding:11px;border:none;border-radius:12px;background:transparent;color:var(--muted);font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.25s ease;}
+.tab-btn.active{background:var(--orange);color:white;box-shadow:0 4px 16px rgba(255,92,26,0.35);}
+.panel{display:none;flex-direction:column;gap:13px;}
+.panel.active{display:flex;animation:fadeUp 0.3s ease both;}
+.photo-upload{display:flex;align-items:center;gap:14px;padding:13px 16px;background:var(--card);border:1.5px dashed var(--border);border-radius:16px;cursor:pointer;transition:border-color 0.2s,background 0.2s;}
+.photo-upload:hover{border-color:var(--orange);background:rgba(255,92,26,0.04);}
+.photo-upload.error{border-color:var(--red);}
+.photo-avatar{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,rgba(255,92,26,0.2),rgba(255,92,26,0.05));display:flex;align-items:center;justify-content:center;font-size:20px;border:1.5px solid rgba(255,92,26,0.2);position:relative;overflow:hidden;flex-shrink:0;}
+.photo-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
+.photo-text{flex:1;}
+.photo-text strong{display:block;font-size:14px;font-weight:500;margin-bottom:2px;}
+.photo-text span{font-size:12px;color:var(--muted);}
+.photo-btn{padding:7px 14px;background:rgba(255,92,26,0.1);border:1px solid rgba(255,92,26,0.25);border-radius:10px;color:var(--orange);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.remember-row{display:flex;align-items:center;justify-content:space-between;}
+.checkbox-label{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;font-size:13px;color:var(--muted);}
+.checkbox-label input[type=checkbox]{display:none;}
+.custom-check{width:20px;height:20px;border:1.5px solid var(--border);border-radius:6px;background:var(--card);display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0;}
+.checkbox-label input:checked+.custom-check{background:var(--orange);border-color:var(--orange);}
+.checkbox-label input:checked+.custom-check::after{content:'✓';font-size:11px;color:white;font-weight:700;}
+.forgot-link{font-size:12px;color:var(--orange);text-decoration:none;font-weight:500;}
+.terms{text-align:center;margin-top:6px;font-size:11px;color:var(--muted);line-height:1.6;}
+.terms a{color:var(--orange);text-decoration:none;}
+
+/* ==================== OTP ==================== */
+#screen-otp{background:var(--dark2);overflow-y:auto;}
+#screen-otp::-webkit-scrollbar{display:none;}
+.otp-inner{padding:78px 28px 40px;display:flex;flex-direction:column;align-items:center;}
+.otp-icon{width:80px;height:80px;background:rgba(255,92,26,0.1);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:38px;border:1.5px solid rgba(255,92,26,0.25);margin-bottom:20px;animation:popIn 0.4s ease both;box-shadow:0 12px 32px rgba(255,92,26,0.15);}
+.otp-title{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;text-align:center;margin-bottom:8px;animation:fadeUp 0.4s 0.1s ease both;}
+.otp-subtitle{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:28px;animation:fadeUp 0.4s 0.15s ease both;max-width:280px;}
+.otp-subtitle strong{color:var(--text);}
+.otp-boxes{display:flex;gap:10px;justify-content:center;margin-bottom:16px;animation:fadeUp 0.4s 0.2s ease both;}
+.otp-box{width:48px;height:58px;background:var(--card);border:1.5px solid var(--border);border-radius:14px;text-align:center;font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--text);outline:none;caret-color:var(--orange);transition:border-color 0.2s,box-shadow 0.2s;}
+.otp-box:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,92,26,0.15);}
+.otp-box.filled{border-color:rgba(255,92,26,0.5);}
+.otp-box.error{border-color:var(--red);box-shadow:0 0 0 3px rgba(224,80,80,0.12);animation:shake 0.4s ease;}
+.otp-error-msg{font-size:13px;color:var(--red);text-align:center;margin-bottom:10px;display:none;}
+.otp-error-msg.show{display:block;animation:fadeIn 0.2s ease;}
+.otp-timer{font-size:12px;color:var(--muted);margin-bottom:4px;text-align:center;animation:fadeUp 0.4s 0.25s ease both;}
+.otp-timer strong{color:var(--orange);}
+.otp-resend{background:none;border:none;color:var(--orange);font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;margin-bottom:20px;display:block;text-align:center;}
+.otp-resend:disabled{color:var(--muted);cursor:not-allowed;text-decoration:none;}
+.otp-back{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;margin-top:14px;display:flex;align-items:center;gap:6px;}
+
+/* ==================== LOCATION ==================== */
+#screen-location{background:var(--dark2);}
+.location-inner{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;margin-top:58px;}
+.loc-icon-wrap{width:100px;height:100px;background:rgba(255,92,26,0.1);border-radius:30px;display:flex;align-items:center;justify-content:center;font-size:48px;margin-bottom:24px;border:1.5px solid rgba(255,92,26,0.2);animation:popIn 0.5s ease both;box-shadow:0 16px 40px rgba(255,92,26,0.15);}
+.loc-title{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:10px;animation:fadeUp 0.5s 0.1s ease both;}
+.loc-title span{color:var(--orange);}
+.loc-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:28px;animation:fadeUp 0.5s 0.2s ease both;max-width:280px;}
+.loc-desc strong{color:var(--text);}
+.loc-perks{display:flex;flex-direction:column;gap:10px;width:100%;margin-bottom:28px;animation:fadeUp 0.5s 0.25s ease both;}
+.loc-perk{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card);border-radius:14px;border:1px solid var(--border);text-align:left;}
+.loc-perk-icon{font-size:20px;flex-shrink:0;}
+.loc-perk-text{font-size:12px;color:var(--muted);line-height:1.4;}
+.loc-perk-text strong{display:block;color:var(--text);font-size:13px;margin-bottom:1px;}
+.btn-allow{width:100%;padding:16px;background:var(--orange);border:none;border-radius:18px;color:white;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 12px 32px rgba(255,92,26,0.35);display:flex;align-items:center;justify-content:center;gap:8px;animation:fadeUp 0.5s 0.35s ease both;transition:transform 0.15s;}
+.btn-allow:hover{transform:translateY(-2px);}
+.btn-skip{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;margin-top:12px;animation:fadeUp 0.5s 0.4s ease both;text-decoration:underline;text-underline-offset:3px;}
+
+/* ==================== HOME ==================== */
+#screen-home{background:var(--dark);}
+.home-header{display:flex;align-items:center;justify-content:space-between;padding:78px 24px 0;}
+.home-logo{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
+.home-logo span{color:var(--orange);}
+.home-avatar{width:36px;height:36px;border-radius:10px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid rgba(255,92,26,0.4);overflow:hidden;cursor:pointer;}
+.home-avatar img{width:100%;height:100%;object-fit:cover;display:none;}
+.map-area{height:190px;background:var(--card);flex-shrink:0;position:relative;overflow:hidden;margin-top:12px;}
+.map-bg{position:absolute;inset:0;background:linear-gradient(135deg,#1a2a1a 0%,#0d1a0d 50%,#1a1a2a 100%);}
+.map-bg::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px);background-size:30px 30px;}
+.map-road-h{position:absolute;left:0;right:0;height:8px;background:rgba(255,255,255,0.06);border-radius:2px;}
+.map-road-v{position:absolute;top:0;bottom:0;width:8px;background:rgba(255,255,255,0.06);border-radius:2px;}
+.map-label{position:absolute;top:10px;left:14px;background:rgba(0,0,0,0.55);border:1px solid var(--border);border-radius:10px;padding:5px 10px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;backdrop-filter:blur(8px);}
+.map-label-dot{width:7px;height:7px;background:var(--orange);border-radius:50%;box-shadow:0 0 6px var(--orange);animation:pulse 2s infinite;}
+.map-pin{position:absolute;display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:transform 0.2s;}
+.map-pin:hover{transform:scale(1.1) translateY(-2px);}
+.map-pin-bubble{border-radius:10px 10px 10px 0;padding:5px 9px;font-size:11px;font-weight:700;font-family:'Syne',sans-serif;white-space:nowrap;border:1.5px solid rgba(255,255,255,0.12);}
+.map-pin-bubble.orn{background:var(--orange);box-shadow:0 4px 12px rgba(255,92,26,0.4);color:white;}
+.map-pin-bubble.grn{background:var(--green);box-shadow:0 4px 12px rgba(42,157,92,0.4);color:white;}
+.map-pin-bubble.ylw{background:#9a7200;box-shadow:0 4px 12px rgba(154,114,0,0.4);color:white;}
+.map-pin-dot{width:6px;height:6px;border-radius:50%;margin-top:2px;}
+.map-you{position:absolute;width:14px;height:14px;background:var(--blue);border-radius:50%;border:3px solid white;box-shadow:0 0 0 6px rgba(77,166,255,0.2),0 2px 8px rgba(0,0,0,0.3);}
+.filter-row{display:flex;gap:8px;padding:12px 24px 8px;overflow-x:auto;flex-shrink:0;}
+.filter-row::-webkit-scrollbar{display:none;}
+.filter-chip{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid var(--border);color:var(--muted);background:var(--card);cursor:pointer;white-space:nowrap;transition:all 0.2s;flex-shrink:0;font-family:'Syne',sans-serif;}
+.filter-chip.active{background:var(--orange);border-color:var(--orange);color:white;box-shadow:0 4px 12px rgba(255,92,26,0.3);}
+.section-header{display:flex;align-items:center;justify-content:space-between;padding:0 24px 10px;flex-shrink:0;}
+.section-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;}
+.section-count{font-size:12px;color:var(--muted);background:var(--card);padding:4px 10px;border-radius:10px;}
+.games-list{flex:1;overflow-y:auto;padding:0 24px;display:flex;flex-direction:column;gap:12px;padding-bottom:90px;}
+.games-list::-webkit-scrollbar{display:none;}
+.game-card{background:var(--card);border-radius:20px;padding:16px;border:1.5px solid var(--border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;animation:slideUp 0.4s ease both;}
+.game-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3);border-color:rgba(255,92,26,0.2);}
+.game-card:nth-child(2){animation-delay:0.08s}.game-card:nth-child(3){animation-delay:0.14s}.game-card:nth-child(4){animation-delay:0.2s}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
+.card-sport{display:flex;align-items:center;gap:10px;}
+.sport-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.sport-icon.okey{background:rgba(255,92,26,0.12)}.sport-icon.futbol{background:rgba(42,157,92,0.12)}.sport-icon.basket{background:rgba(255,180,0,0.12)}.sport-icon.tenis{background:rgba(100,180,255,0.12)}
+.card-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:2px;}
+.card-host{font-size:12px;color:var(--muted);}
+.badge{padding:5px 10px;border-radius:10px;font-size:11px;font-weight:700;font-family:'Syne',sans-serif;flex-shrink:0;}
+.badge.acik{background:rgba(42,157,92,0.12);color:#4caf8e;border:1px solid rgba(42,157,92,0.2);}
+.badge.dolu{background:rgba(224,80,80,0.1);color:#e07070;border:1px solid rgba(224,80,80,0.2);}
+.card-meta{display:flex;gap:8px;flex-wrap:wrap;}
+.meta-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);}
+.meta-dot{width:4px;height:4px;background:var(--border);border-radius:50%;}
+.card-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.player-slots{display:flex;}
+.slot{width:26px;height:26px;border-radius:8px;border:2px solid var(--card);display:flex;align-items:center;justify-content:center;font-size:12px;margin-left:-6px;}
+.slot:first-child{margin-left:0}
+.slot.filled{background:var(--card2)}.slot.empty{background:rgba(255,92,26,0.1);border-color:rgba(255,92,26,0.3);color:var(--orange);font-size:14px;}
+.slot-info{font-size:12px;color:var(--muted);margin-left:8px;}
+.slot-info strong{color:var(--orange);}
+.join-btn{padding:7px 16px;background:var(--orange);border:none;border-radius:12px;color:white;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;box-shadow:0 4px 12px rgba(255,92,26,0.3);}
+.join-btn:hover{transform:scale(1.05);}
+.join-btn.full{background:var(--card2);color:var(--muted);box-shadow:none;cursor:not-allowed;}
+
+/* ==================== GAME DETAIL ==================== */
+#screen-detail{background:var(--dark2);}
+.detail-inner{flex:1;overflow-y:auto;padding-bottom:90px;}
+.detail-inner::-webkit-scrollbar{display:none;}
+.detail-map{height:180px;position:relative;overflow:hidden;flex-shrink:0;}
+.detail-map .map-bg{position:absolute;inset:0;background:linear-gradient(135deg,#1a2a1a,#0d1a0d);}
+.detail-map .map-bg::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px);background-size:30px 30px;}
+.detail-map-pin{position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);display:flex;flex-direction:column;align-items:center;}
+.detail-map-bubble{background:var(--orange);color:white;border-radius:14px 14px 14px 0;padding:8px 14px;font-size:13px;font-weight:700;font-family:'Syne',sans-serif;box-shadow:0 6px 20px rgba(255,92,26,0.5);}
+.detail-map-dot{width:8px;height:8px;background:var(--orange);border-radius:50%;margin-top:3px;}
+.detail-header{padding:20px 24px 0;}
+.detail-back{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--text);cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:16px;}
+.detail-sport-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.detail-sport-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;}
+.detail-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:4px;}
+.detail-host{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+.detail-host-avatar{width:22px;height:22px;border-radius:6px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:12px;}
+.detail-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 24px;}
+.detail-meta-card{background:var(--card);border-radius:14px;padding:12px 14px;border:1px solid var(--border);}
+.detail-meta-card .dmc-label{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500;}
+.detail-meta-card .dmc-value{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;}
+.detail-section{padding:0 24px 14px;}
+.detail-section-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
+.detail-players{display:flex;gap:10px;flex-wrap:wrap;}
+.player-chip{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:13px;}
+.player-chip .pc-avatar{width:26px;height:26px;border-radius:7px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:13px;}
+.player-chip.empty-slot{border-style:dashed;color:var(--orange);border-color:rgba(255,92,26,0.3);background:rgba(255,92,26,0.05);}
+.detail-desc{font-size:14px;color:var(--muted);line-height:1.6;background:var(--card);border-radius:14px;padding:14px;border:1px solid var(--border);}
+.detail-bottom{position:absolute;bottom:0;left:0;right:0;padding:16px 24px 28px;background:linear-gradient(transparent,var(--dark2) 30%);z-index:10;}
+.detail-join-btn{width:100%;padding:17px;background:var(--orange);border:none;border-radius:18px;color:white;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 12px 32px rgba(255,92,26,0.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform 0.15s;}
+.detail-join-btn:hover{transform:translateY(-2px);}
+.detail-join-btn:disabled{background:var(--card2);color:var(--muted);box-shadow:none;cursor:not-allowed;}
+
+/* ==================== CREATE ==================== */
+#screen-create{background:var(--dark2);}
+.create-inner{flex:1;overflow-y:auto;padding:0 24px 100px;}
+.create-inner::-webkit-scrollbar{display:none;}
+.create-header{padding:78px 24px 20px;display:flex;align-items:center;gap:12px;}
+.create-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
+.sport-picker{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:4px;}
+.sport-option{padding:16px;background:var(--card);border:1.5px solid var(--border);border-radius:16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.2s;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;}
+.sport-option:hover{border-color:rgba(255,92,26,0.3);}
+.sport-option.selected{background:rgba(255,92,26,0.1);border-color:var(--orange);color:var(--orange);}
+.sport-option .so-icon{font-size:24px;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--card2);}
+.sport-option.selected .so-icon{background:rgba(255,92,26,0.15);}
+.create-form{display:flex;flex-direction:column;gap:14px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.select-field{width:100%;padding:13px 16px 13px 44px;background:var(--card);border:1.5px solid var(--border);border-radius:16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;appearance:none;cursor:pointer;transition:border-color 0.2s;}
+.select-field:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,92,26,0.12);}
+option{background:var(--card2);color:var(--text);}
+.player-count-row{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;padding:12px 16px;border:1.5px solid var(--border);}
+.pc-label{flex:1;font-size:14px;}
+.pc-label small{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+.pc-controls{display:flex;align-items:center;gap:10px;}
+.pc-btn{width:32px;height:32px;border-radius:10px;background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+.pc-btn:hover{background:rgba(255,92,26,0.2);border-color:rgba(255,92,26,0.3);color:var(--orange);}
+.pc-num{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;min-width:28px;text-align:center;}
+.textarea-field{width:100%;padding:13px 16px;background:var(--card);border:1.5px solid var(--border);border-radius:16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;min-height:80px;transition:border-color 0.2s;}
+.textarea-field::placeholder{color:var(--muted);}
+.textarea-field:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,92,26,0.12);}
+.create-bottom{position:absolute;bottom:0;left:0;right:0;padding:16px 24px 28px;background:linear-gradient(transparent,var(--dark2) 30%);z-index:10;}
+
+/* ==================== SEARCH ==================== */
+#screen-search{background:var(--dark2);}
+.search-inner{flex:1;overflow-y:auto;padding-bottom:90px;}
+.search-inner::-webkit-scrollbar{display:none;}
+.search-header{padding:78px 24px 16px;}
+.search-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:16px;}
+.search-bar{position:relative;display:flex;align-items:center;}
+.search-bar .input-icon{font-size:18px;}
+.search-input{width:100%;padding:14px 16px 14px 48px;background:var(--card);border:1.5px solid var(--border);border-radius:16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;outline:none;transition:border-color 0.2s;}
+.search-input::placeholder{color:var(--muted);}
+.search-input:focus{border-color:var(--orange);}
+.search-section{padding:16px 24px 8px;}
+.search-section-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;}
+.sport-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.sport-card{background:var(--card);border-radius:16px;padding:16px;border:1.5px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.2s;}
+.sport-card:hover{border-color:rgba(255,92,26,0.3);transform:translateY(-2px);}
+.sport-card .sc-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.sc-info strong{display:block;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:2px;}
+.sc-info span{font-size:11px;color:var(--muted);}
+.search-results{padding:0 24px;display:flex;flex-direction:column;gap:10px;}
+.result-card{background:var(--card);border-radius:16px;padding:14px;border:1.5px solid var(--border);display:flex;align-items:center;gap:12px;cursor:pointer;transition:all 0.2s;animation:fadeUp 0.3s ease both;}
+.result-card:hover{border-color:rgba(255,92,26,0.3);transform:translateY(-1px);}
+.rc-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.rc-info{flex:1;}
+.rc-info strong{display:block;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:2px;}
+.rc-info span{font-size:12px;color:var(--muted);}
+.rc-badge{padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;font-family:'Syne',sans-serif;}
+.filter-section{padding:16px 24px 8px;}
+.filter-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+.filter-groups{display:flex;flex-direction:column;gap:12px;}
+.filter-group-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
+.range-slider{width:100%;accent-color:var(--orange);cursor:pointer;}
+.filter-chips-row{display:flex;gap:8px;flex-wrap:wrap;}
+.fchip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid var(--border);color:var(--muted);background:var(--card);cursor:pointer;transition:all 0.2s;font-family:'Syne',sans-serif;}
+.fchip.active{background:rgba(255,92,26,0.12);border-color:rgba(255,92,26,0.3);color:var(--orange);}
+
+/* ==================== PROFILE ==================== */
+#screen-profile{background:var(--dark2);}
+.profile-inner{flex:1;overflow-y:auto;padding-bottom:90px;}
+.profile-inner::-webkit-scrollbar{display:none;}
+.profile-hero{padding:78px 24px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+.profile-avatar-wrap{position:relative;margin-bottom:16px;}
+.profile-avatar{width:88px;height:88px;border-radius:24px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:36px;border:3px solid rgba(255,92,26,0.3);overflow:hidden;box-shadow:0 8px 24px rgba(255,92,26,0.3);}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;display:none;}
+.profile-edit-badge{position:absolute;bottom:-4px;right:-4px;width:26px;height:26px;background:var(--orange);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid var(--dark2);cursor:pointer;}
+.profile-name{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:4px;}
+.profile-loc{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px;justify-content:center;}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:16px;overflow:hidden;margin:0 24px 20px;}
+.stat-item{background:var(--card);padding:16px 10px;text-align:center;}
+.stat-num{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--orange);}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px;}
+.profile-section{padding:0 24px 16px;}
+.profile-section-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+.sport-badges{display:flex;gap:8px;flex-wrap:wrap;}
+.sport-badge{padding:8px 14px;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;}
+.activity-list{display:flex;flex-direction:column;gap:8px;}
+.activity-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border-radius:14px;border:1px solid var(--border);}
+.ai-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.ai-info strong{display:block;font-size:13px;font-weight:600;margin-bottom:2px;}
+.ai-info span{font-size:11px;color:var(--muted);}
+.ai-badge{padding:4px 9px;border-radius:8px;font-size:11px;font-weight:600;font-family:'Syne',sans-serif;}
+.settings-list{display:flex;flex-direction:column;gap:2px;}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--card);border-radius:12px;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);transition:border-color 0.2s;}
+.settings-item:hover{border-color:rgba(255,92,26,0.2);}
+.si-left{display:flex;align-items:center;gap:12px;font-size:14px;}
+.si-icon{font-size:20px;}
+.si-arrow{color:var(--muted);font-size:16px;}
+.logout-btn{width:100%;padding:14px;background:rgba(224,80,80,0.08);border:1.5px solid rgba(224,80,80,0.2);border-radius:16px;color:#e07070;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin:0 24px;width:calc(100% - 48px);}
+
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+
+/* ==================== ROZET SİSTEMİ ==================== */
+@keyframes badgeUnlock{0%{opacity:0;transform:scale(0.3) rotate(-20deg)}60%{transform:scale(1.2) rotate(5deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+@keyframes starPop{0%{transform:scale(0)}70%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-60px) rotate(360deg);opacity:0}}
+
+.badge-unlock-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:none;align-items:center;justify-content:center;}
+.badge-unlock-card{background:var(--card);border-radius:28px;padding:32px 28px;margin:24px;text-align:center;border:1.5px solid var(--border);position:relative;overflow:hidden;width:100%;}
+.badge-unlock-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,92,26,0.05),rgba(255,210,52,0.05));border-radius:inherit;}
+.buc-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);margin-bottom:16px;}
+.buc-icon{font-size:72px;margin-bottom:16px;display:block;animation:badgeUnlock 0.6s 0.2s ease both;}
+.buc-name{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:8px;}
+.buc-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:24px;}
+.buc-close{padding:14px 32px;background:var(--orange);border:none;border-radius:16px;color:white;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(255,92,26,0.35);}
+.confetti-dot{position:absolute;width:8px;height:8px;border-radius:50%;animation:confettiFall 1.2s ease forwards;}
+
+.badges-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px;}
+.badge-item{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;}
+.badge-icon-wrap{width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;position:relative;transition:transform 0.2s;}
+.badge-icon-wrap:hover{transform:scale(1.08);}
+.badge-icon-wrap.locked{filter:grayscale(1);opacity:0.3;}
+.badge-icon-wrap.gold{background:linear-gradient(135deg,#2a2000,#3d3000);border:1.5px solid #8a6a00;}
+.badge-icon-wrap.silver{background:linear-gradient(135deg,#1a1a2a,#252535);border:1.5px solid #5a5a7a;}
+.badge-icon-wrap.bronze{background:linear-gradient(135deg,#2a1a10,#3d2a1a);border:1.5px solid #8a5a30;}
+.badge-icon-wrap.special{background:linear-gradient(135deg,#0d2a1a,#1a3d2a);border:1.5px solid #2a8a5a;}
+.badge-icon-wrap.orange{background:rgba(255,92,26,0.12);border:1.5px solid rgba(255,92,26,0.3);}
+.badge-shine{position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);background-size:200% 200%;animation:shimmer 3s linear infinite;}
+.badge-label{font-size:10px;color:var(--muted);text-align:center;line-height:1.2;font-weight:500;max-width:58px;}
+.badge-item.locked .badge-label{opacity:0.4;}
+
+.xp-bar-wrap{background:var(--card);border-radius:14px;padding:14px 16px;border:1px solid var(--border);margin-bottom:14px;}
+.xp-bar-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.xp-level-txt{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.xp-level-badge{background:var(--orange);color:white;font-size:10px;padding:3px 8px;border-radius:8px;font-weight:700;}
+.xp-points-txt{font-size:12px;color:var(--muted);}
+.xp-bar{height:8px;background:var(--card2);border-radius:4px;overflow:hidden;}
+.xp-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--orange),var(--yellow));position:relative;transition:width 1.2s ease;}
+.xp-bar-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);background-size:200% 100%;animation:shimmer 2s linear infinite;}
+
+/* ==================== OYUNCU PROFIL KARTI ==================== */
+.player-modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.75);z-index:250;display:none;align-items:flex-end;}
+.player-modal{background:var(--dark2);border-radius:28px 28px 0 0;width:100%;max-height:90%;overflow-y:auto;animation:slideUp 0.35s ease;}
+.player-modal::-webkit-scrollbar{display:none;}
+.pm-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:14px auto 0;}
+.pm-header{padding:20px 24px 0;display:flex;align-items:flex-start;gap:16px;}
+.pm-avatar{width:68px;height:68px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;border:2px solid rgba(255,92,26,0.3);}
+.pm-info{flex:1;}
+.pm-name{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:3px;}
+.pm-location{font-size:12px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:4px;}
+.pm-sport-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.pm-sport-tag{padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;background:var(--card);border:1px solid var(--border);}
+.pm-close-btn{background:var(--card);border:none;color:var(--muted);width:32px;height:32px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-top:2px;}
+.pm-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:16px;overflow:hidden;margin:16px 24px;}
+.pm-stat{background:var(--card);padding:14px 8px;text-align:center;}
+.pm-stat-num{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--orange);}
+.pm-stat-label{font-size:10px;color:var(--muted);margin-top:2px;}
+.pm-section{padding:0 24px 14px;}
+.pm-section-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+.pm-badges-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;}
+.pm-badges-row::-webkit-scrollbar{display:none;}
+.pm-badge-chip{display:flex;align-items:center;gap:7px;padding:8px 12px;background:var(--card);border-radius:12px;border:1px solid var(--border);white-space:nowrap;flex-shrink:0;}
+.pm-badge-emoji{font-size:18px;}
+.pm-badge-info strong{display:block;font-size:12px;font-weight:600;}
+.pm-badge-info span{font-size:10px;color:var(--muted);}
+.pm-reviews{display:flex;flex-direction:column;gap:8px;}
+.pm-review{background:var(--card);border-radius:14px;padding:12px 14px;border:1px solid var(--border);}
+.pm-review-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.pm-reviewer{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
+.pm-reviewer-avatar{width:20px;height:20px;border-radius:6px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:11px;}
+.pm-stars{display:flex;gap:2px;}
+.pm-star-ic{font-size:12px;color:#FFD234;}
+.pm-star-ic.empty{filter:grayscale(1);opacity:0.3;}
+.pm-review-text{font-size:12px;color:var(--muted);line-height:1.5;}
+.pm-score-bar-wrap{margin-top:10px;}
+.pm-score-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.pm-score-label{font-size:11px;color:var(--muted);width:80px;flex-shrink:0;}
+.pm-score-bar{flex:1;height:6px;background:var(--card2);border-radius:3px;overflow:hidden;}
+.pm-score-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--orange),var(--yellow));}
+.pm-score-num{font-size:11px;color:var(--orange);font-weight:700;width:20px;text-align:right;}
+.pm-action-row{display:flex;gap:10px;padding:4px 24px 28px;}
+.pm-action-btn{flex:1;padding:13px;border-radius:14px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:transform 0.15s;}
+.pm-action-btn.primary{background:var(--orange);border:none;color:white;box-shadow:0 6px 20px rgba(255,92,26,0.3);}
+.pm-action-btn.secondary{background:var(--card);border:1.5px solid var(--border);color:var(--text);}
+.pm-action-btn:hover{transform:scale(1.02);}
+
+/* ==================== ROZET TOAST ==================== */
+@keyframes badgeSlideIn{from{opacity:0;transform:translateY(-80px) scale(0.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes badgeSlideOut{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-80px) scale(0.9)}}
+.badge-toast{position:absolute;top:90px;left:16px;right:16px;background:var(--card2);border:1.5px solid rgba(255,92,26,0.35);border-radius:20px;padding:14px 16px;display:flex;align-items:center;gap:14px;z-index:600;box-shadow:0 8px 32px rgba(0,0,0,0.5);animation:badgeSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;}
+.badge-toast.hiding{animation:badgeSlideOut 0.3s ease forwards;}
+.bt-icon{font-size:36px;flex-shrink:0;line-height:1;}
+.bt-info{flex:1;}
+.bt-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);margin-bottom:2px;}
+.bt-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;margin-bottom:1px;}
+.bt-desc{font-size:11px;color:var(--muted);line-height:1.4;}
+.bt-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1;}
+
+/* ==================== PUANLAMA ==================== */
+.rating-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:280;display:none;align-items:flex-end;}
+.rating-modal{background:var(--dark2);border-radius:28px 28px 0 0;width:100%;max-height:90%;overflow-y:auto;padding:0 0 4px;animation:slideUp 0.35s ease;}
+.rating-modal::-webkit-scrollbar{display:none;}
+.rm-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:14px auto 20px;display:block;}
+.rm-head{padding:0 24px 16px;}
+.rm-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:4px;}
+.rm-subtitle{font-size:13px;color:var(--muted);}
+.rm-players{display:flex;flex-direction:column;gap:10px;padding:0 24px;margin-bottom:16px;}
+.rm-player{background:var(--card);border-radius:16px;padding:14px 16px;border:1px solid var(--border);}
+.rm-player-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.rm-player-avatar{width:40px;height:40px;border-radius:12px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.rm-player-info{flex:1;}
+.rm-player-info strong{display:block;font-size:14px;font-weight:600;margin-bottom:2px;}
+.rm-player-info span{font-size:11px;color:var(--muted);}
+.rm-star-row{display:flex;gap:8px;justify-content:center;margin-bottom:10px;}
+.rm-star{font-size:30px;cursor:pointer;transition:transform 0.15s;opacity:0.3;user-select:none;}
+.rm-star.active{opacity:1;animation:starPop 0.2s ease;}
+.rm-star:hover{transform:scale(1.2);}
+.rm-tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+.rm-tag{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid var(--border);color:var(--muted);background:transparent;cursor:pointer;transition:all 0.2s;font-family:'Syne',sans-serif;}
+.rm-tag.active{background:rgba(255,210,52,0.12);border-color:rgba(255,210,52,0.4);color:#FFD234;}
+.rm-submit-wrap{padding:8px 24px 32px;}
+.rm-submit{width:100%;padding:16px;background:var(--orange);border:none;border-radius:18px;color:white;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 12px 32px rgba(255,92,26,0.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:transform 0.15s;}
+.rm-submit:hover{transform:translateY(-2px);}
+</style>
+</head>
+<body>
+<div class="bg-decor">
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-grid"></div>
+</div>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="statusbar">
+    <span class="statusbar-time" id="statusbar-clock">9:41</span>
+    <div class="statusbar-icons">
+      <div class="signal-bar"><span></span><span></span><span></span></div>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="white" opacity="0.9"><path d="M8 2.4C9.9 2.4 11.6 3.2 12.8 4.5L14.2 3.1C12.6 1.5 10.4 0.5 8 0.5C5.6 0.5 3.4 1.5 1.8 3.1L3.2 4.5C4.4 3.2 6.1 2.4 8 2.4Z"/><path d="M8 5.2C9.2 5.2 10.3 5.7 11.1 6.5L12.5 5.1C11.3 3.9 9.7 3.2 8 3.2C6.3 3.2 4.7 3.9 3.5 5.1L4.9 6.5C5.7 5.7 6.8 5.2 8 5.2Z"/><circle cx="8" cy="10" r="1.5"/></svg>
+      <div class="battery"><div class="battery-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- ===== AUTH ===== -->
+  <div class="screen" id="screen-auth">
+    <div class="auth-inner">
+      <div class="logo-row">
+        <div class="logo-icon">🎯</div>
+        <div class="logo-text">Pro<span>-Bul</span></div>
+      </div>
+      <div class="hero-tagline" style="margin-top:16px">Eksik <em>oyuncuyu</em><br>saniyeler içinde bul.</div>
+      <div class="hero-sub" style="margin-top:7px">Yanındaki insanlarla buluş, oyna, eğlen.</div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('register')">Kayıt Ol</button>
+        <button class="tab-btn" onclick="switchTab('login')">Giriş Yap</button>
+      </div>
+      <!-- Kayıt -->
+      <div class="panel active" id="panel-register">
+        <div>
+          <label class="input-label">Ad Soyad</label>
+          <div class="input-wrapper"><span class="input-icon">👤</span><input type="text" id="reg-name" class="input-field" placeholder="Adınız Soyadınız"></div>
+          <div class="field-error" id="err-reg-name">Ad soyad boş bırakılamaz.</div>
+        </div>
+        <div>
+          <label class="input-label">E-Posta</label>
+          <div class="input-wrapper"><span class="input-icon">✉️</span><input type="email" id="reg-email" class="input-field" placeholder="ornek@mail.com"></div>
+          <div class="field-error" id="err-reg-email">Geçerli bir e-posta adresi girin.</div>
+        </div>
+        <div>
+          <label class="input-label">Telefon Numarası</label>
+          <div class="input-wrapper"><span class="input-icon">📱</span><input type="tel" id="reg-phone" class="input-field" placeholder="+90 5__ ___ __ __"></div>
+          <div class="field-error" id="err-reg-phone">Geçerli bir telefon numarası girin.</div>
+        </div>
+        <div>
+          <label class="input-label">Şifre</label>
+          <div class="input-wrapper"><span class="input-icon">🔒</span><input type="password" id="reg-pass" class="input-field has-toggle" placeholder="En az 6 karakter"><button class="input-toggle" onclick="toggleRegPass()" id="regEyeBtn">👁️</button></div>
+          <div class="field-error" id="err-reg-pass">Şifre en az 6 karakter olmalı.</div>
+        </div>
+        <div>
+          <label class="input-label">Şifre Tekrar</label>
+          <div class="input-wrapper"><span class="input-icon">🔒</span><input type="password" id="reg-pass2" class="input-field" placeholder="Şifrenizi tekrar girin"></div>
+          <div class="field-error" id="err-reg-pass2">Şifreler eşleşmiyor.</div>
+        </div>
+        <div>
+          <label class="input-label">Profil Fotoğrafı</label>
+          <div class="photo-upload" id="photo-upload-area" onclick="triggerUpload()">
+            <div class="photo-avatar"><span id="avatarEmoji">🧑</span><img id="avatarImg" alt=""></div>
+            <div class="photo-text"><strong id="photoStrong">Fotoğraf Ekle</strong><span id="photoSpan">JPG veya PNG, maks. 5MB</span></div>
+            <div class="photo-btn" id="photoBtn">Seç</div>
+          </div>
+          <div class="field-error" id="err-reg-photo">Lütfen bir profil fotoğrafı seçin.</div>
+          <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="previewPhoto(event)">
+        </div>
+        <button class="btn-primary" id="btn-register" onclick="handleRegister()"><span>🚀</span> Hesap Oluştur</button>
+        <div class="terms">Devam ederek <a href="#">Kullanım Koşulları</a>'nı ve <a href="#">Gizlilik Politikası</a>'nı kabul etmiş olursun.</div>
+      </div>
+      <!-- Giriş -->
+      <div class="panel" id="panel-login">
+        <div>
+          <label class="input-label">E-Posta</label>
+          <div class="input-wrapper"><span class="input-icon">✉️</span><input type="email" id="login-email" class="input-field" placeholder="ornek@mail.com"></div>
+          <div class="field-error" id="err-login-email">E-posta boş bırakılamaz.</div>
+        </div>
+        <div>
+          <label class="input-label">Şifre</label>
+          <div class="input-wrapper"><span class="input-icon">🔒</span><input type="password" id="login-pass" class="input-field has-toggle" placeholder="Şifrenizi girin"><button class="input-toggle" onclick="togglePassword()" id="eyeBtn">👁️</button></div>
+          <div class="field-error" id="err-login-pass">Şifre boş bırakılamaz.</div>
+        </div>
+        <div class="remember-row">
+          <label class="checkbox-label"><input type="checkbox" id="rememberMe"><div class="custom-check"></div>Beni Hatırla</label>
+          <a href="#" class="forgot-link" onclick="showForgotScreen();return false;">Şifremi Unuttum</a>
+        </div>
+        <button class="btn-primary" id="btn-login" onclick="handleLogin()" style="margin-top:4px"><span>🔑</span> Giriş Yap</button>
+        <div class="terms">Devam ederek <a href="#">Kullanım Koşulları</a>'nı ve <a href="#">Gizlilik Politikası</a>'nı kabul etmiş olursun.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== OTP DOGRULAMA ===== -->
+  <div class="screen hidden" id="screen-otp">
+    <div class="otp-inner">
+      <div class="otp-icon">📧</div>
+      <div class="otp-title">E-postanı Doğrula</div>
+      <div class="otp-subtitle" id="otp-email-hint">Mail adresine 6 haneli doğrulama kodunu gönderdik.</div>
+      <div class="otp-boxes">
+        <input class="otp-box" id="otp-0" maxlength="1" type="text" inputmode="numeric">
+        <input class="otp-box" id="otp-1" maxlength="1" type="text" inputmode="numeric">
+        <input class="otp-box" id="otp-2" maxlength="1" type="text" inputmode="numeric">
+        <input class="otp-box" id="otp-3" maxlength="1" type="text" inputmode="numeric">
+        <input class="otp-box" id="otp-4" maxlength="1" type="text" inputmode="numeric">
+        <input class="otp-box" id="otp-5" maxlength="1" type="text" inputmode="numeric">
+      </div>
+      <div class="otp-error-msg" id="otp-error-msg">Kod yanlış, tekrar dene.</div>
+      <div class="otp-timer" id="otp-timer">Kod <strong id="otp-countdown">10:00</strong> içinde geçersiz olur</div>
+      <button class="otp-resend" id="otp-resend-btn" disabled onclick="resendOtp()">Kodu Tekrar Gönder</button>
+      <button class="btn-primary" id="btn-verify-otp" onclick="verifyOtp()" style="width:100%"><span>✅</span> Kodu Doğrula</button>
+      <button class="otp-back" onclick="backToRegister()">← Geri Dön</button>
+    </div>
+  </div>
+
+  <!-- ===== ŞİFRE SIFIRLAMA ===== -->
+  <div class="screen hidden" id="screen-forgot">
+    <div class="otp-inner">
+      <div class="otp-icon">🔑</div>
+      <div class="otp-title" id="forgot-title">Şifreni Sıfırla</div>
+      <div class="otp-subtitle" id="forgot-subtitle">E-posta adresini gir, sana sıfırlama kodu gönderelim.</div>
+
+      <!-- Adım 1: e-posta -->
+      <div id="forgot-step1" style="width:100%;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label class="input-label">E-Posta</label>
+          <div class="input-wrapper"><span class="input-icon">✉️</span><input type="email" id="forgot-email" class="input-field" placeholder="kayitli@mail.com"></div>
+          <div class="field-error" id="err-forgot-email">Geçerli bir e-posta girin.</div>
+        </div>
+        <button class="btn-primary" id="btn-forgot-send" onclick="sendForgotOtp()"><span>📧</span> Kod Gönder</button>
+      </div>
+
+      <!-- Adım 2: kod + yeni şifre -->
+      <div id="forgot-step2" style="width:100%;display:none;flex-direction:column;gap:12px;">
+        <div class="otp-boxes" style="margin-bottom:4px;">
+          <input class="otp-box" id="fotp-0" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-box" id="fotp-1" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-box" id="fotp-2" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-box" id="fotp-3" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-box" id="fotp-4" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-box" id="fotp-5" maxlength="1" type="text" inputmode="numeric">
+        </div>
+        <div class="otp-error-msg" id="fotp-error-msg">Kod yanlış.</div>
+        <div>
+          <label class="input-label">Yeni Şifre</label>
+          <div class="input-wrapper"><span class="input-icon">🔒</span><input type="password" id="forgot-newpass" class="input-field" placeholder="En az 6 karakter"></div>
+          <div class="field-error" id="err-forgot-newpass">Şifre en az 6 karakter olmalı.</div>
+        </div>
+        <button class="btn-primary" id="btn-forgot-reset" onclick="resetPassword()"><span>✅</span> Şifremi Güncelle</button>
+      </div>
+
+      <button class="otp-back" onclick="goTo('auth')" style="margin-top:14px;">← Girişe Dön</button>
+    </div>
+  </div>
+
+  <!-- ===== LOCATION ===== -->
+  <div class="screen hidden" id="screen-location">
+    <div class="location-inner">
+      <div class="loc-icon-wrap">📍</div>
+      <div class="loc-title">Konumuna <span>İzin Ver</span></div>
+      <div class="loc-desc">Yakınındaki <strong>oyunları ve oyuncu arayışlarını</strong> sana gösterebilmek için konumuna ihtiyacımız var.</div>
+      <div class="loc-perks">
+        <div class="loc-perk"><div class="loc-perk-icon">🗺️</div><div class="loc-perk-text"><strong>Yakın Oyunları Gör</strong>Harita üzerinde aktif oyunları keşfet.</div></div>
+        <div class="loc-perk"><div class="loc-perk-icon">⚡</div><div class="loc-perk-text"><strong>Anında Bildirim</strong>Yeni oyun açıldığında ilk sen öğren.</div></div>
+        <div class="loc-perk"><div class="loc-perk-icon">🎯</div><div class="loc-perk-text"><strong>Sana Özel Eşleşme</strong>En uygun oyuncularla buluş.</div></div>
+      </div>
+      <button class="btn-allow" onclick="allowLocation()">📍 Konuma İzin Ver</button>
+      <button class="btn-skip" onclick="goToHome()">Şimdi değil, atla</button>
+    </div>
+  </div>
+
+  <!-- ===== HOME ===== -->
+  <div class="screen hidden" id="screen-home">
+    <div class="home-header">
+      <div>
+        <div class="home-logo">Pro<span>-Bul</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="home-greeting">Spor arkadaşı bul ⚽</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:5px;background:var(--card);padding:6px 10px;border-radius:10px;border:1px solid var(--border);">
+          <span style="width:7px;height:7px;background:var(--green);border-radius:50%;display:inline-block;animation:pulse 2s infinite;"></span>
+          <span style="font-size:11px;color:var(--muted);font-weight:600;" id="online-count">24 çevrimiçi</span>
+        </div>
+        <div class="home-avatar" id="homeAvatar" onclick="navTo('profile')">🧑</div>
+      </div>
+    </div>
+    <div class="map-area" id="home-map-area" style="position:relative;overflow:hidden;">
+      <!-- Google Maps iframe - kullanıcı konumuna göre güncellenir -->
+      <iframe id="home-map-iframe"
+        src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d50000!2d32.4846!3d37.8716!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1str!2str!4v1700000000000!5m2!1str!2str"
+        width="100%" height="100%" style="border:0;position:absolute;inset:0;" 
+        allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
+      </iframe>
+      <div class="map-label" style="position:absolute;top:10px;left:14px;z-index:10;"><div class="map-label-dot"></div><span id="map-location-label">Konum alınıyor...</span></div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-chip active" onclick="filterHome(this,'all')">Tümü</div>
+      <div class="filter-chip" onclick="filterHome(this,'futbol')">⚽ Halısaha</div>
+      <div class="filter-chip" onclick="filterHome(this,'okey')">🀄 Okey</div>
+      <div class="filter-chip" onclick="filterHome(this,'basket')">🏀 Basketbol</div>
+      <div class="filter-chip" onclick="filterHome(this,'tenis')">🎾 Tenis</div>
+    </div>
+    <div class="section-header">
+      <div class="section-title">Yakındaki Oyunlar</div>
+      <div class="section-count" id="game-count">4 oyun</div>
+    </div>
+    <div class="games-list" id="games-list">
+      <div id="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 24px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:16px;">🏟️</div>
+        <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:8px;">Henüz ilan yok</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px;">İlk oyunu sen oluştur!<br>Yakınındaki oyuncular görsün.</div>
+        <button onclick="navTo('create')" style="padding:12px 24px;background:var(--orange);border:none;border-radius:14px;color:white;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(255,92,26,0.35);">+ Oyun Oluştur</button>
+      </div>
+    </div>
+    <button class="fab" onclick="navTo('create')">＋</button>
+    <div class="bottom-nav">
+      <button class="nav-item active" id="nav-home" onclick="navTo('home')"><div class="nav-icon">🏠</div><div class="nav-label">Ana Sayfa</div></button>
+      <button class="nav-item" id="nav-search" onclick="navTo('search')"><div class="nav-icon">🔍</div><div class="nav-label">Ara</div></button>
+      <button class="nav-item" id="nav-create-nav" onclick="navTo('create')"><div class="nav-icon">➕</div><div class="nav-label">Oluştur</div></button>
+      <button class="nav-item" id="nav-profile" onclick="navTo('profile')"><div class="nav-icon">👤</div><div class="nav-label">Profil</div></button>
+    </div>
+  </div>
+
+  <!-- ===== DETAIL ===== -->
+  <div class="screen hidden" id="screen-detail">
+    <div class="detail-map" style="position:relative;overflow:hidden;">
+      <iframe id="detail-map-iframe"
+        src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d5000!2d32.4846!3d37.8716!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1str!2str!4v1700000000001!5m2!1str!2str"
+        width="100%" height="100%" style="border:0;position:absolute;inset:0;"
+        allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
+      </iframe>
+      <div style="position:absolute;top:10px;left:14px;z-index:10;background:rgba(0,0,0,0.7);border-radius:10px;padding:5px 12px;font-size:12px;color:white;display:flex;align-items:center;gap:6px;">
+        <div class="map-label-dot"></div><span id="detail-map-bubble">⚽ Halısaha</span>
+      </div>
+    </div>
+    <div class="detail-inner">
+      <div class="detail-header">
+        <button class="detail-back" onclick="goBack()">← Geri</button>
+        <div class="detail-sport-row">
+          <div>
+            <div class="detail-title" id="detail-title">Halısaha Maçı</div>
+            <div class="detail-host"><div class="detail-host-avatar">👤</div><span id="detail-host">Ahmet K. tarafından</span></div>
+          </div>
+          <div class="badge acik" id="detail-badge">Açık</div>
+        </div>
+      </div>
+      <div class="detail-meta-grid">
+        <div class="detail-meta-card"><div class="dmc-label">Mesafe</div><div class="dmc-value" id="detail-dist">📍 0.8 km</div></div>
+        <div class="detail-meta-card"><div class="dmc-label">Saat</div><div class="dmc-value" id="detail-time">🕖 19:00</div></div>
+        <div class="detail-meta-card"><div class="dmc-label">Tarih</div><div class="dmc-value" id="detail-date">📅 Bu akşam</div></div>
+        <div class="detail-meta-card"><div class="dmc-label">Ücret</div><div class="dmc-value" id="detail-price">💰 Ücretsiz</div></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Oyuncular</div>
+        <div class="detail-players" id="detail-players"></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Açıklama</div>
+        <div class="detail-desc" id="detail-desc">Bu oyun hakkında detaylı bilgi.</div>
+      </div>
+    </div>
+    <div class="detail-bottom">
+      <div style="display:flex;gap:10px;">
+        <button id="detail-msg-btn" onclick="detailMsgOwner()" style="display:none;flex:0 0 auto;padding:17px 18px;background:var(--card2);border:1.5px solid var(--border);border-radius:18px;color:var(--text);font-size:16px;cursor:pointer;">💬</button>
+        <button class="detail-join-btn" id="detail-join-btn" onclick="detailJoin()" style="flex:1"><span>🎯</span> Oyuna Katıl</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CREATE ===== -->
+  <div class="screen hidden" id="screen-create">
+    <div class="create-header">
+      <button class="back-btn" onclick="goBack()">←</button>
+      <div class="create-title">Oyun Oluştur</div>
+    </div>
+    <div class="create-inner">
+      <div class="create-form">
+        <div>
+          <label class="input-label">Spor Dalı Seç</label>
+          <div class="sport-picker" id="sport-picker">
+            <div class="sport-option selected" onclick="selectSport(this,'futbol')"><div class="so-icon">⚽</div>Halısaha</div>
+            <div class="sport-option" onclick="selectSport(this,'okey')"><div class="so-icon">🀄</div>Okey</div>
+            <div class="sport-option" onclick="selectSport(this,'basket')"><div class="so-icon">🏀</div>Basketbol</div>
+            <div class="sport-option" onclick="selectSport(this,'tenis')"><div class="so-icon">🎾</div>Tenis</div>
+          </div>
+        </div>
+        <div>
+          <label class="input-label">Oyun Adı</label>
+          <div class="input-wrapper"><span class="input-icon">🏷️</span><input type="text" id="create-name" class="input-field" placeholder="örn. Akşam Halısahası"></div>
+          <div class="field-error" id="err-create-name">Oyun adı boş bırakılamaz.</div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="input-label">Tarih</label>
+            <div class="input-wrapper"><span class="input-icon">📅</span><input type="date" id="create-date" class="input-field"></div>
+          </div>
+          <div>
+            <label class="input-label">Saat</label>
+            <div class="input-wrapper"><span class="input-icon">🕐</span><input type="time" id="create-time" class="input-field"></div>
+          </div>
+        </div>
+        <div>
+          <label class="input-label">Konum</label>
+          <div class="input-wrapper"><span class="input-icon">📍</span><input type="text" id="create-loc" class="input-field" placeholder="Adres veya yer adı"></div>
+          <div class="field-error" id="err-create-loc">Konum boş bırakılamaz.</div>
+        </div>
+        <div>
+          <label class="input-label">Oyuncu Sayısı</label>
+          <div class="player-count-row">
+            <div class="pc-label">Kaç kişi eksik?<small>Toplam değil, eksik oyuncu sayısı</small></div>
+            <div class="pc-controls">
+              <button class="pc-btn" onclick="changeCount(-1)">−</button>
+              <span class="pc-num" id="pc-num">2</span>
+              <button class="pc-btn" onclick="changeCount(1)">+</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="input-label">Ücret</label>
+          <div class="input-wrapper"><span class="input-icon">💰</span>
+            <select class="input-field select-field" style="padding-left:44px">
+              <option>Ücretsiz</option><option>Katkı payı var</option><option>Ücretli</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="input-label">Açıklama (İsteğe Bağlı)</label>
+          <textarea class="textarea-field" placeholder="Oyun hakkında bilgi, kurallar, notlar..."></textarea>
+        </div>
+        <div style="height:20px"></div>
+      </div>
+    </div>
+    <div class="create-bottom">
+      <button class="btn-primary" onclick="handleCreate()"><span>🚀</span> Oyunu Yayınla</button>
+    </div>
+  </div>
+
+  <!-- ===== SEARCH ===== -->
+  <div class="screen hidden" id="screen-search">
+    <div class="search-inner">
+      <div class="search-header">
+        <div class="search-title">Oyun Ara</div>
+        <div class="search-bar">
+          <span class="input-icon" style="position:absolute;left:16px;font-size:18px;opacity:0.5">🔍</span>
+          <input type="text" class="search-input" id="search-input" placeholder="Spor, yer veya kişi ara..." oninput="handleSearch(this.value)">
+        </div>
+      </div>
+      <div id="search-default">
+        <div class="search-section">
+          <div class="search-section-title">Spor Dalları</div>
+          <div class="sport-grid">
+            <div class="sport-card" onclick="searchBySport('Halısaha')"><div class="sc-icon futbol">⚽</div><div class="sc-info"><strong>Halısaha</strong><span>12 aktif oyun</span></div></div>
+            <div class="sport-card" onclick="searchBySport('Okey')"><div class="sc-icon okey">🀄</div><div class="sc-info"><strong>Okey</strong><span>8 aktif oyun</span></div></div>
+            <div class="sport-card" onclick="searchBySport('Basketbol')"><div class="sc-icon basket">🏀</div><div class="sc-info"><strong>Basketbol</strong><span>5 aktif oyun</span></div></div>
+            <div class="sport-card" onclick="searchBySport('Tenis')"><div class="sc-icon tenis">🎾</div><div class="sc-info"><strong>Tenis</strong><span>3 aktif oyun</span></div></div>
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-title">Filtrele</div>
+          <div class="filter-groups">
+            <div>
+              <div class="filter-group-label">Mesafe (km)</div>
+              <input type="range" class="range-slider" min="1" max="20" value="10" oninput="document.getElementById('range-val').textContent=this.value+' km'">
+              <div style="font-size:12px;color:var(--orange);margin-top:4px" id="range-val">10 km</div>
+            </div>
+            <div>
+              <div class="filter-group-label">Durum</div>
+              <div class="filter-chips-row">
+                <div class="fchip active" onclick="toggleFchip(this)">Açık</div>
+                <div class="fchip" onclick="toggleFchip(this)">Dolu</div>
+                <div class="fchip active" onclick="toggleFchip(this)">Ücretsiz</div>
+                <div class="fchip" onclick="toggleFchip(this)">Bu Gün</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="search-results" style="display:none">
+        <div class="search-section"><div class="search-section-title" id="search-results-title">Sonuçlar</div></div>
+        <div class="search-results" id="search-results-list"></div>
+      </div>
+    </div>
+    <div class="bottom-nav">
+      <button class="nav-item" onclick="navTo('home')"><div class="nav-icon">🏠</div><div class="nav-label">Ana Sayfa</div></button>
+      <button class="nav-item active"><div class="nav-icon">🔍</div><div class="nav-label">Ara</div></button>
+      <button class="nav-item" onclick="navTo('create')"><div class="nav-icon">➕</div><div class="nav-label">Oluştur</div></button>
+      <button class="nav-item" onclick="navTo('profile')"><div class="nav-icon">👤</div><div class="nav-label">Profil</div></button>
+    </div>
+  </div>
+
+  <!-- ===== PROFILE ===== -->
+  <div class="screen hidden" id="screen-profile">
+    <div class="profile-inner">
+      <div class="profile-hero">
+        <div class="profile-avatar-wrap">
+          <div class="profile-avatar" id="profileAvatar">🧑<img id="profileAvatarImg" alt=""></div>
+          <div class="profile-edit-badge" onclick="openProfileEdit()">✏️</div>
+        </div>
+        <div class="profile-name" id="profileName">Kullanıcı</div>
+        <div class="profile-loc">📍 Konya, Türkiye</div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-item"><div class="stat-num">24</div><div class="stat-label">Oyun</div></div>
+        <div class="stat-item"><div class="stat-num">4.8</div><div class="stat-label">Puan</div></div>
+        <div class="stat-item"><div class="stat-num">12</div><div class="stat-label">Arkadaş</div></div>
+      </div>
+      <div class="profile-section">
+        <div class="xp-bar-wrap">
+          <div class="xp-bar-top">
+            <div class="xp-level-txt">Seviye <span class="xp-level-badge">7</span></div>
+            <div class="xp-points-txt">1.240 / 1.500 XP</div>
+          </div>
+          <div class="xp-bar"><div class="xp-bar-fill" id="xp-bar-fill" style="width:83%"></div></div>
+        </div>
+        <div class="profile-section-title">Rozetlerim</div>
+        <div class="badges-grid" id="profile-badges-grid"></div>
+      </div>
+      <div class="profile-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="profile-section-title" style="margin:0;">Arkadaşlar</div>
+          <button onclick="showFriendRequestsPanel()" id="friend-req-btn" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:5px 10px;color:var(--muted);font-size:12px;cursor:pointer;font-family:Syne,sans-serif;font-weight:600;">İstekler <span id="friend-req-count" style="display:none;background:var(--orange);color:white;border-radius:6px;padding:1px 6px;font-size:10px;margin-left:4px;">0</span></button>
+        </div>
+        <!-- Arama kutusu -->
+        <div style="position:relative;margin-bottom:12px;">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;">🔍</span>
+          <input id="friend-search-input" type="text" placeholder="Kullanıcı ara..." 
+            oninput="searchUsers(this.value)"
+            style="width:100%;padding:10px 12px 10px 36px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;outline:none;font-family:DM Sans,sans-serif;">
+          <div id="friend-search-results" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card2);border:1px solid var(--border);border-radius:12px;z-index:100;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+        </div>
+        <!-- Gelen istekler paneli -->
+        <div id="friend-requests-panel" style="display:none;background:var(--card);border-radius:14px;padding:12px;margin-bottom:12px;border:1px solid var(--border);">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;">GİREN İSTEKLER</div>
+          <div id="friend-requests-list"><div style="color:var(--muted);font-size:13px;text-align:center;padding:8px;">Yükleniyor...</div></div>
+        </div>
+        <!-- Arkadaş listesi -->
+        <div id="friends-section" style="padding:4px 0;"><div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yükleniyor...</div></div>
+      </div>
+      <div class="profile-section">
+        <div class="profile-section-title">Son Aktiviteler</div>
+        <div class="activity-list">
+          <div class="activity-item">
+            <div class="ai-icon futbol">⚽</div>
+            <div class="ai-info"><strong>Halısaha Maçı</strong><span>2 gün önce · Konya</span></div>
+            <div class="ai-badge" style="background:rgba(42,157,92,0.12);color:#4caf8e">Katıldı</div>
+          </div>
+          <div class="activity-item">
+            <div class="ai-icon okey">🀄</div>
+            <div class="ai-info"><strong>Okey Oyunu</strong><span>5 gün önce · Karatay</span></div>
+            <div class="ai-badge" style="background:rgba(255,92,26,0.12);color:var(--orange)">Oluşturdu</div>
+          </div>
+          <div class="activity-item">
+            <div class="ai-icon basket">🏀</div>
+            <div class="ai-info"><strong>Sokak Basketbolu</strong><span>1 hafta önce · Selçuklu</span></div>
+            <div class="ai-badge" style="background:rgba(42,157,92,0.12);color:#4caf8e">Katıldı</div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-section">
+        <div class="profile-section-title">Ayarlar</div>
+        <div class="settings-list">
+          <div class="settings-item" onclick="showToast('🔔 Bildirim ayarları yakında!','success')"><div class="si-left"><span class="si-icon">🔔</span> Bildirimler</div><span class="si-arrow">›</span></div>
+          <div class="settings-item" onclick="showToast('🔒 Gizlilik ayarları yakında!','success')"><div class="si-left"><span class="si-icon">🔒</span> Gizlilik</div><span class="si-arrow">›</span></div>
+          <div class="settings-item" onclick="refreshLocation()"><div class="si-left"><span class="si-icon">📍</span> Konumu Güncelle</div><span class="si-arrow">›</span></div>
+          <div class="settings-item" onclick="openProfileEdit()"><div class="si-left"><span class="si-icon">✏️</span> Profili Düzenle</div><span class="si-arrow">›</span></div>
+          <div class="settings-item" onclick="showToast('❓ Yardım yakında!','success')"><div class="si-left"><span class="si-icon">❓</span> Yardım & Destek</div><span class="si-arrow">›</span></div>
+        </div>
+        <button class="logout-btn" onclick="logout()">🚪 Çıkış Yap</button>
+      </div>
+    </div>
+    <div class="bottom-nav">
+      <button class="nav-item" onclick="navTo('home')"><div class="nav-icon">🏠</div><div class="nav-label">Ana Sayfa</div></button>
+      <button class="nav-item" onclick="navTo('search')"><div class="nav-icon">🔍</div><div class="nav-label">Ara</div></button>
+      <button class="nav-item" onclick="navTo('create')"><div class="nav-icon">➕</div><div class="nav-label">Oluştur</div></button>
+      <button class="nav-item active"><div class="nav-icon">👤</div><div class="nav-label">Profil</div></button>
+    </div>
+  </div>
+
+
+  <!-- ===== OYUNCU PROFIL KARTI (MODAL) ===== -->
+  <div id="player-modal-overlay" class="player-modal-overlay" style="display:none" onclick="closePlayerModal(event)">
+    <div class="player-modal" id="player-modal">
+      <div class="pm-handle"></div>
+      <div class="pm-header">
+        <div class="pm-avatar" id="pm-avatar">👤</div>
+        <div class="pm-info">
+          <div class="pm-name" id="pm-name">Oyuncu</div>
+          <div class="pm-location" id="pm-location">📍 Konya</div>
+          <div class="pm-sport-tags" id="pm-sport-tags"></div>
+        </div>
+        <button class="pm-close-btn" onclick="closePlayerModal()">✕</button>
+      </div>
+      <div class="pm-stats">
+        <div class="pm-stat"><div class="pm-stat-num" id="pm-games">0</div><div class="pm-stat-label">Oyun</div></div>
+        <div class="pm-stat"><div class="pm-stat-num" id="pm-rating">0.0</div><div class="pm-stat-label">Puan</div></div>
+        <div class="pm-stat"><div class="pm-stat-num" id="pm-level">1</div><div class="pm-stat-label">Seviye</div></div>
+      </div>
+      <div class="pm-section">
+        <div class="pm-section-title">Rozetler</div>
+        <div class="pm-badges-row" id="pm-badges-row"></div>
+      </div>
+      <div class="pm-section">
+        <div class="pm-section-title">Değerlendirme Puanları</div>
+        <div class="pm-score-bar-wrap" id="pm-score-bars"></div>
+      </div>
+      <div class="pm-section">
+        <div class="pm-section-title">Son Yorumlar</div>
+        <div class="pm-reviews" id="pm-reviews"></div>
+      </div>
+      <div class="pm-action-row">
+        <button class="pm-action-btn secondary" id="pm-msg-btn" onclick="pmSendMessage()">💬 Mesaj Gönder</button>
+        <button class="pm-action-btn primary" onclick="showToast('🤝 Arkadaşlık isteği gönderildi!','success');closePlayerModal()">🤝 Arkadaş Ekle</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== OYUN SONU PUANLAMA ===== -->
+  <div id="rating-overlay" class="rating-overlay" style="display:none" onclick="closeRatingModal(event)">
+    <div class="rating-modal" onclick="event.stopPropagation()">
+      <span class="rm-handle"></span>
+      <div class="rm-head" style="display:flex;align-items:flex-start;justify-content:space-between;">
+        <div>
+          <div class="rm-title">Oyunu Değerlendir ⭐</div>
+          <div class="rm-subtitle" id="rm-subtitle">Birlikte oynadığın oyuncuları puanla</div>
+        </div>
+        <button onclick="closeRatingModal()" style="background:var(--card);border:none;color:var(--muted);width:32px;height:32px;border-radius:10px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">✕</button>
+      </div>
+      <div class="rm-players" id="rm-players"></div>
+      <div class="rm-submit-wrap">
+        <button class="rm-submit" id="rm-submit-btn"><span>✅</span> Değerlendirmeleri Gönder</button>
+      </div>
+    </div>
+  </div>
+
+
+</div><!-- /phone -->
+
+<script>
+// =========== BACKEND URL ===========
+// server.js çalışırken bu adrese istek gider
+const API = 'https://www.pro-bul.online';
+
+// =========== STATE ===========
+let photoSelected=false, passVisible=false, userPhoto=null;
+let screenHistory=[], currentScreen='auth', playerCount=2, selectedSport='futbol';
+let currentOtpEmail = '', otpTimerInterval = null;
+
+const GAMES = []; // Gerçek ilanlar buraya eklenir
+
+// Demo oyunlar kaldırıldı - gerçek API kullanılıyor
+
+// =========== AUTH ===========
+function switchTab(tab){
+  ['tab-btn'].forEach(c=>document.querySelectorAll('.'+c).forEach((b,i)=>b.classList.toggle('active',(i===0&&tab==='register')||(i===1&&tab==='login'))));
+  document.getElementById('panel-register').classList.toggle('active',tab==='register');
+  document.getElementById('panel-login').classList.toggle('active',tab==='login');
+  document.querySelectorAll('.field-error').forEach(e=>e.classList.remove('show'));
+  document.querySelectorAll('.input-field').forEach(e=>e.classList.remove('error','success'));
+  // Scroll to top so login button is always visible
+  var authScreen = document.getElementById('screen-auth');
+  if(authScreen) authScreen.scrollTop = 0;
+}
+function triggerUpload(){document.getElementById('fileInput').click();}
+function previewPhoto(event){
+  const file=event.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    userPhoto=e.target.result; photoSelected=true;
+    const img=document.getElementById('avatarImg');
+    img.src=e.target.result; img.style.display='block';
+    document.getElementById('avatarEmoji').style.display='none';
+    document.getElementById('photoStrong').textContent='Fotoğraf Seçildi ✓';
+    document.getElementById('photoSpan').textContent=file.name;
+    document.getElementById('photoBtn').textContent='Değiştir';
+    document.getElementById('photo-upload-area').classList.remove('error');
+    setErr('reg-photo',false);
+  };
+  reader.readAsDataURL(file);
+}
+function togglePassword(){
+  passVisible=!passVisible;
+  document.getElementById('login-pass').type=passVisible?'text':'password';
+  document.getElementById('eyeBtn').textContent=passVisible?'🙈':'👁️';
+}
+function toggleRegPass(){
+  const f=document.getElementById('reg-pass');
+  const visible = f.type==='text';
+  f.type=visible?'password':'text';
+  document.getElementById('regEyeBtn').textContent=visible?'👁️':'🙈';
+}
+function setErr(id,show,msg){
+  const el=document.getElementById('err-'+id); if(!el)return;
+  if(msg)el.textContent=msg; el.classList.toggle('show',show);
+}
+function setFS(id,state){const el=document.getElementById(id);if(!el)return;el.classList.remove('error','success');if(state)el.classList.add(state);}
+
+async function handleRegister(){
+  const name=document.getElementById('reg-name').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const phone=document.getElementById('reg-phone').value.trim();
+  const pass=document.getElementById('reg-pass').value;
+  const pass2=document.getElementById('reg-pass2').value;
+  const emailRe=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRe=/^(\+90|0)?[0-9]{10,11}$/;
+  let valid=true;
+
+  if(!name){setFS('reg-name','error');setErr('reg-name',true,'Ad soyad boş bırakılamaz.');valid=false;}
+  else{setFS('reg-name','success');setErr('reg-name',false);}
+
+  if(!email||!emailRe.test(email)){setFS('reg-email','error');setErr('reg-email',true,'Geçerli bir e-posta adresi girin.');valid=false;}
+  else{setFS('reg-email','success');setErr('reg-email',false);}
+
+  if(!phone||!phoneRe.test(phone.replace(/\s/g,''))){setFS('reg-phone','error');setErr('reg-phone',true,'Geçerli bir telefon numarası girin.');valid=false;}
+  else{setFS('reg-phone','success');setErr('reg-phone',false);}
+
+  if(!pass||pass.length<6){setFS('reg-pass','error');setErr('reg-pass',true,'Şifre en az 6 karakter olmalı.');valid=false;}
+  else{setFS('reg-pass','success');setErr('reg-pass',false);}
+
+  if(pass!==pass2){setFS('reg-pass2','error');setErr('reg-pass2',true,'Şifreler eşleşmiyor.');valid=false;}
+  else if(pass&&pass.length>=6){setFS('reg-pass2','success');setErr('reg-pass2',false);}
+
+  if(!photoSelected){document.getElementById('photo-upload-area').classList.add('error');setErr('reg-photo',true,'Lütfen bir profil fotoğrafı seçin.');valid=false;}
+  if(!valid)return;
+
+  const btn=document.getElementById('btn-register');
+  btn.innerHTML='<span>⏳</span> Kayıt olunuyor...'; btn.style.opacity='0.8'; btn.disabled=true;
+  try {
+    const res=await fetch(API+'/api/register',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,email,phone,password:pass,profilePhoto:userPhoto||null})
+    });
+    const data=await res.json();
+    if(!data.success && !data.ok) throw new Error(data.error||'Kayıt başarısız');
+    const uName=data.user.fullName||data.user.name||name;
+    localStorage.setItem('currentUser',JSON.stringify(data.user));
+    localStorage.setItem('probul_name',uName);
+    document.getElementById('profileName').textContent=uName;
+    window._justRegistered=true;
+    showToast('🎉 Hesabın oluşturuldu! Hoş geldin!','success');
+    goTo('location');
+  }catch(err){
+    showToast('❌ '+(err.message||'Sunucuya bağlanılamadı.'),'error');
+  }finally{
+    btn.innerHTML='<span>🚀</span> Hesap Oluştur'; btn.style.opacity='1'; btn.disabled=false;
+  }
+}
+async function handleLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  let valid=true;
+  if(!email){setFS('login-email','error');setErr('login-email',true,'E-posta boş bırakılamaz.');valid=false;}
+  else{setFS('login-email','success');setErr('login-email',false);}
+  if(!pass){setFS('login-pass','error');setErr('login-pass',true,'Şifre boş bırakılamaz.');valid=false;}
+  else{setFS('login-pass','success');setErr('login-pass',false);}
+  if(!valid)return;
+  const btn=document.getElementById('btn-login');
+  btn.innerHTML='<span>⏳</span> Giriş yapılıyor...'; btn.style.opacity='0.8'; btn.disabled=true;
+  try {
+    const res=await fetch(API+'/api/login',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email,password:pass})
+    });
+    const data=await res.json();
+    if(!data.success && !data.ok) throw new Error(data.error||'Giriş başarısız');
+    // Kullanıcıyı kaydet
+    var uName = data.user.fullName||data.user.name||email.split('@')[0];
+    localStorage.setItem('currentUser', JSON.stringify(data.user));
+    localStorage.setItem('probul_name', uName);
+    // Beni hatırla
+    if(document.getElementById('rememberMe').checked){
+      localStorage.setItem('probul_email', email);
+    }
+    document.getElementById('profileName').textContent=uName;
+    showToast('👋 Hoş geldin, '+(data.user.fullName||email.split('@')[0])+'!','success');
+    goTo('home');
+    loadGamesFromAPI();
+    setTimeout(initHomeMap, 500);
+  }catch(err){
+    setFS('login-pass','error');
+    showToast('❌ '+(err.message||'Giriş başarısız'),'error');
+  }finally{
+    btn.innerHTML='<span>🔑</span> Giriş Yap'; btn.style.opacity='1'; btn.disabled=false;
+  }
+}
+function setUserPhoto(){
+  if(!userPhoto)return;
+  ['homeAvatar','profileAvatar'].forEach(id=>{
+    const wrap=document.getElementById(id);
+    const imgId=id==='homeAvatar'?'homeAvatarImg':'profileAvatarImg';
+    let img=document.getElementById(imgId);
+    if(!img){img=document.createElement('img');img.id=imgId;wrap.appendChild(img);}
+    img.src=userPhoto; img.style.cssText='width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;';
+    wrap.style.fontSize='0';
+  });
+}
+
+// =========== OTP ===========
+function initOtpBoxes(){
+  for(let i=0;i<6;i++){
+    const box=document.getElementById('otp-'+i);
+    const idx=i;
+    box.addEventListener('input',function(){
+      this.value=this.value.replace(/\D/g,'').slice(0,1);
+      if(this.value){
+        this.classList.add('filled');
+        this.classList.remove('error');
+        document.getElementById('otp-error-msg').classList.remove('show');
+        if(idx<5) document.getElementById('otp-'+(idx+1)).focus();
+        else verifyOtp();
+      }
+    });
+    box.addEventListener('keydown',function(e){
+      if(e.key==='Backspace'&&!this.value&&idx>0){
+        document.getElementById('otp-'+(idx-1)).focus();
+      }
+    });
+    box.addEventListener('paste',function(e){
+      e.preventDefault();
+      const text=(e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+      for(let j=0;j<text.length&&j<6;j++){
+        const b=document.getElementById('otp-'+j);
+        b.value=text[j]; b.classList.add('filled');
+      }
+      if(text.length>0) document.getElementById('otp-'+Math.min(text.length,5)).focus();
+    });
+  }
+}
+function getOtpCode(){return [0,1,2,3,4,5].map(i=>document.getElementById('otp-'+i).value).join('');}
+function clearOtpBoxes(isError){
+  for(let i=0;i<6;i++){
+    const b=document.getElementById('otp-'+i);
+    b.value=''; b.classList.remove('filled');
+    if(isError) b.classList.add('error'); else b.classList.remove('error');
+  }
+  if(!isError) document.getElementById('otp-0').focus();
+}
+function backToRegister(){
+  clearInterval(otpTimerInterval);
+  clearOtpBoxes(false);
+  goTo('auth');
+}
+function startOtpTimer(){
+  clearInterval(otpTimerInterval);
+  let remaining=600;
+  const resendBtn=document.getElementById('otp-resend-btn');
+  resendBtn.disabled=true;
+  const timerEl=document.getElementById('otp-timer');
+  const countdownEl=document.getElementById('otp-countdown');
+  timerEl.innerHTML='Kod <strong id="otp-countdown">10:00</strong> içinde geçersiz olur';
+  otpTimerInterval=setInterval(function(){
+    remaining--;
+    const m=Math.floor(remaining/60).toString().padStart(2,'0');
+    const s=(remaining%60).toString().padStart(2,'0');
+    const cd=document.getElementById('otp-countdown');
+    if(cd) cd.textContent=m+':'+s;
+    if(remaining===540) resendBtn.disabled=false;
+    if(remaining<=0){
+      clearInterval(otpTimerInterval);
+      timerEl.innerHTML='<span style="color:var(--red)">⏰ Kodun süresi doldu. Yeni kod iste.</span>';
+      resendBtn.disabled=false;
+    }
+  },1000);
+}
+async function verifyOtp(){
+  const code=getOtpCode();
+  if(code.length<6){showToast('❌ 6 haneli kodu tam gir','error');return;}
+  const btn=document.getElementById('btn-verify-otp');
+  btn.innerHTML='<span>⏳</span> Doğrulanıyor...'; btn.disabled=true;
+  try{
+    const res=await fetch(API+'/api/verify-otp',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:currentOtpEmail,code})
+    });
+    const data=await res.json();
+    if(!data.success && !data.ok) throw new Error(data.error);
+    clearInterval(otpTimerInterval);
+    document.getElementById('profileName').textContent=(data.user&&data.user.fullName)||currentOtpEmail.split('@')[0];
+    setUserPhoto();
+    window._justRegistered = true;
+    showToast('🎉 Hesabın doğrulandı! Hoş geldin!','success');
+    goTo('location');
+  }catch(err){
+    clearOtpBoxes(true);
+    const errEl=document.getElementById('otp-error-msg');
+    errEl.textContent=err.message||'Kod yanlış, tekrar dene.';
+    errEl.classList.add('show');
+    document.getElementById('otp-0').focus();
+  }finally{
+    btn.innerHTML='<span>✅</span> Kodu Doğrula'; btn.disabled=false;
+  }
+}
+async function resendOtp(){
+  const btn=document.getElementById('otp-resend-btn');
+  btn.disabled=true; btn.textContent='Gönderiliyor...';
+  try{
+    const res=await fetch(API+'/api/resend-otp',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:currentOtpEmail})
+    });
+    const data=await res.json();
+    if(!data.success && !data.ok) throw new Error(data.error);
+    clearOtpBoxes(false);
+    startOtpTimer();
+    showToast('📧 Yeni kod gönderildi!','success');
+  }catch(err){
+    showToast('❌ '+(err.message||'Gönderilemedi'),'error');
+    btn.disabled=false;
+  }finally{
+    btn.textContent='Kodu Tekrar Gönder';
+  }
+}
+
+// =========== LOCATION ===========
+var userLocation = null;
+
+function allowLocation(){
+  var btn = document.querySelector('.btn-allow');
+  if(btn) { btn.innerHTML='📍 Konum Alınıyor...'; btn.disabled=true; }
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){
+      userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      // Konum adını al
+      fetch('https://nominatim.openstreetmap.org/reverse?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude+'&format=json&accept-language=tr')
+        .then(r=>r.json())
+        .then(function(d){
+          var city = d.address.city||d.address.town||d.address.district||d.address.county||'Türkiye';
+          var district = d.address.suburb||d.address.neighbourhood||'';
+          var locName = district ? district+', '+city : city;
+          userLocation.name = locName;
+          // Profil konumunu güncelle
+          var locEl = document.querySelector('.profile-loc');
+          if(locEl) locEl.textContent = '📍 '+locName;
+          // Ana sayfa harita etiketini güncelle
+          var mapLabel = document.querySelector('.map-label');
+          if(mapLabel) mapLabel.innerHTML = '<div class="map-label-dot"></div>'+locName;
+          // API'ye kaydet
+          var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+          if(u.id){
+            fetch(API+'/api/users/'+u.id+'/location',{
+              method:'PUT', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({latitude:pos.coords.latitude, longitude:pos.coords.longitude, locationName:locName})
+            });
+            u.location = locName;
+            localStorage.setItem('currentUser', JSON.stringify(u));
+          }
+          showToast('📍 Konum alındı: '+locName,'success');
+        }).catch(function(){ userLocation.name='Türkiye'; });
+      initHomeMap();
+      goToHome();
+    }, function(err){
+      console.error('Konum hatası:', err);
+      showToast('⚠️ Konum alınamadı, devam ediliyor','error');
+      goToHome();
+    }, { timeout:10000, enableHighAccuracy:true });
+  } else {
+    showToast('⚠️ Tarayıcınız konumu desteklemiyor','error');
+    goToHome();
+  }
+}
+function goToHome(){goTo('home');}
+
+// =========== SCREENS ===========
+function goTo(name){
+  const prev=document.getElementById('screen-'+currentScreen);
+  const next=document.getElementById('screen-'+name);
+  if(prev&&name!==currentScreen){prev.classList.add('hidden');}
+  if(next){next.classList.remove('hidden');}
+  if(currentScreen!=='auth'&&name!==currentScreen)screenHistory.push(currentScreen);
+  currentScreen=name;
+}
+function goBack(){
+  const prev=screenHistory.pop()||'home';
+  document.getElementById('screen-'+currentScreen).classList.add('hidden');
+  document.getElementById('screen-'+prev).classList.remove('hidden');
+  currentScreen=prev;
+}
+function navTo(name){
+  // Auth koruması - giriş yapılmamışsa auth'a yönlendir
+  if(name!=='auth'){
+    var u=JSON.parse(localStorage.getItem('currentUser')||'null');
+    if(!u||!u.id){
+      goTo('auth'); return;
+    }
+  }
+  document.getElementById('screen-'+currentScreen).classList.add('hidden');
+  document.getElementById('screen-'+name).classList.remove('hidden');
+  screenHistory=[];
+  currentScreen=name;
+  if(name==='home'){
+    loadGamesFromAPI();
+    updateNavActive('home');
+  }
+  if(name==='profile'){
+    setTimeout(function(){ loadFriendsSection(); loadRealProfileStats(); }, 100);
+    updateNavActive('profile');
+  }
+  if(name==='search') updateNavActive('search');
+  if(name==='create') updateNavActive('create');
+}
+function updateNavActive(name){
+  document.querySelectorAll('.nav-item').forEach(function(el){ el.classList.remove('active'); });
+  var el=document.getElementById('nav-'+name);
+  if(el) el.classList.add('active');
+}
+
+// =========== HOME ===========
+function filterHome(el,sport){
+  document.querySelectorAll('.filter-row .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  loadGamesFromAPI(sport==='all'?null:sport);
+}
+function quickJoin(e,btn){
+  e.stopPropagation();
+  var card=btn.closest('.game-card');
+  var gameIdx=card?GAMES.findIndex(function(g){return g.title===card.querySelector('.card-title').textContent}): -1;
+  var game=gameIdx>=0?GAMES[gameIdx]:null;
+  if(!game){showToast('❌ İlan bulunamadı','error');return;}
+  var currentUser=JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!currentUser.id){showToast('❌ Giriş yapmalısın!','error');return;}
+  btn.textContent='⏳'; btn.disabled=true;
+  fetch(API+'/api/listings/'+game.id+'/join',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({userId:currentUser.id})
+  }).then(r=>r.json()).then(function(data){
+    if(data.success){
+      btn.textContent='✓ Katıldın';
+      btn.style.cssText='padding:7px 16px;background:var(--green);border:none;border-radius:12px;color:white;font-family:Syne,sans-serif;font-size:12px;font-weight:700;cursor:not-allowed;box-shadow:0 4px 12px rgba(42,157,92,0.35);';
+      uStats.games++; addXP(20);
+      showToast('🎉 Oyuna başarıyla katıldın! +20 XP','success');
+      loadGamesFromAPI();
+    } else {
+      btn.textContent='Katıl'; btn.disabled=false;
+      showToast('❌ '+(data.error||'Katılınamadı'),'error');
+    }
+  }).catch(function(){ btn.textContent='Katıl'; btn.disabled=false; showToast('❌ Bağlantı hatası','error'); });
+}
+
+// =========== DETAIL ===========
+function openDetail(idx){
+  const g=GAMES[idx];
+  if(!g)return;
+  document.getElementById('detail-map-bubble').textContent=g.icon+' '+g.title;
+  document.getElementById('detail-title').textContent=g.title;
+  document.getElementById('detail-host').textContent=g.host+' tarafından';
+  document.getElementById('detail-badge').textContent=g.full?'Dolu':'Açık';
+  document.getElementById('detail-badge').className='badge '+(g.full?'dolu':'acik');
+  document.getElementById('detail-dist').textContent='📍 '+(g.loc||g.dist);
+  document.getElementById('detail-time').textContent='🕐 '+g.time;
+  document.getElementById('detail-date').textContent='📅 '+g.date;
+  document.getElementById('detail-price').textContent='💰 '+g.price;
+  document.getElementById('detail-desc').textContent=g.desc||'';
+  const pp=document.getElementById('detail-players');
+  pp.innerHTML='';
+  (g.players||[]).forEach(function(p,i){
+    pp.innerHTML+='<div class="player-chip"><div class="pc-avatar">'+p+'</div><span>Oyuncu '+(i+1)+'</span></div>';
+  });
+  for(var i=0;i<(g.empty||0);i++){
+    pp.innerHTML+='<div class="player-chip empty-slot"><div class="pc-avatar">+</div><span>Boş yer</span></div>';
+  }
+  const jb=document.getElementById('detail-join-btn');
+  jb.disabled=g.full;
+  jb.innerHTML=g.full?'Oyun Dolu':'<span>🎯</span> Oyuna Katıl';
+  jb.style.background=g.full?'var(--card2)':'var(--orange)';
+  // Mesaj butonu - ilan sahibine
+  var msgBtn=document.getElementById('detail-msg-btn');
+  if(msgBtn){
+    var cu=JSON.parse(localStorage.getItem('currentUser')||'{}');
+    if(g.userId && cu.id && String(g.userId)!==String(cu.id)){
+      msgBtn.style.display='block';
+    } else { msgBtn.style.display='none'; }
+  }
+  // Google Maps haritasını güncelle
+  updateDetailMap(g.lat, g.lng, g.loc, g.icon+' '+g.title);
+  screenHistory.push(currentScreen);
+  goTo('detail');
+}
+function detailJoin(){
+  const btn=document.getElementById('detail-join-btn');
+  btn.innerHTML='<span>⏳</span> Katılıyor...'; btn.disabled=true;
+  setTimeout(()=>{
+    btn.innerHTML='<span>✅</span> Katıldın!';
+    btn.style.background='var(--green)'; btn.style.boxShadow='0 12px 32px rgba(42,157,92,0.35)';
+    showToast('🎉 Oyuna başarıyla katıldın!','success');
+  },1200);
+}
+
+// =========== CREATE ===========
+function selectSport(el,sport){
+  document.querySelectorAll('.sport-option').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected'); selectedSport=sport;
+}
+function changeCount(delta){
+  playerCount=Math.max(1,Math.min(10,playerCount+delta));
+  document.getElementById('pc-num').textContent=playerCount;
+}
+
+const SPORT_ICONS = {futbol:'⚽',okey:'🀄',basket:'🏀',tenis:'🎾'};
+
+function handleCreate(){
+  const name=document.getElementById('create-name').value.trim();
+  const loc=document.getElementById('create-loc').value.trim();
+  const dateVal=document.getElementById('create-date').value;
+  const timeVal=document.getElementById('create-time').value;
+  const price=document.querySelector('#screen-create .select-field').value;
+  const desc=document.querySelector('#screen-create .textarea-field').value.trim();
+  let valid=true;
+  if(!name){document.getElementById('create-name').classList.add('error');setErr('create-name',true,'Oyun adı boş bırakılamaz.');valid=false;}
+  else{document.getElementById('create-name').classList.remove('error');setErr('create-name',false);}
+  if(!loc){document.getElementById('create-loc').classList.add('error');setErr('create-loc',true,'Konum boş bırakılamaz.');valid=false;}
+  else{document.getElementById('create-loc').classList.remove('error');setErr('create-loc',false);}
+  if(!valid)return;
+
+  const btn=document.querySelector('#screen-create .btn-primary');
+  btn.innerHTML='<span>⏳</span> Yayınlanıyor...'; btn.style.opacity='0.8'; btn.disabled=true;
+
+  // Tarih/saat formatla
+  let dateStr='Belirtilmedi', timeStr='--:--';
+  if(dateVal){
+    const d=new Date(dateVal);
+    const today=new Date(); today.setHours(0,0,0,0);
+    const tomorrow=new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+    if(d.getTime()===today.getTime()) dateStr='Bugün';
+    else if(d.getTime()===tomorrow.getTime()) dateStr='Yarın';
+    else dateStr=d.toLocaleDateString('tr-TR',{day:'numeric',month:'short'});
+  }
+  if(timeVal) timeStr=timeVal;
+
+  // API'ye gönder
+  const currentUser = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!currentUser.id){ showToast('❌ Giriş yapmalısın!','error'); btn.innerHTML='<span>🚀</span> Oyunu Yayınla'; btn.style.opacity='1'; btn.disabled=false; return; }
+
+  fetch(API+'/api/listings', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      userId: currentUser.id,
+      sport: selectedSport,
+      location: loc,
+      date: dateVal || new Date().toISOString().split('T')[0],
+      time: timeStr,
+      duration: 90,
+      playerCount: playerCount,
+      skillLevel: 'Orta',
+      description: name + (desc?' — '+desc:''),
+      notes: price
+    })
+  }).then(r=>r.json()).then(function(data){
+    if(data.success){
+      document.getElementById('create-name').value='';
+      document.getElementById('create-loc').value='';
+      document.getElementById('create-date').value='';
+      document.getElementById('create-time').value='';
+      document.querySelector('#screen-create .textarea-field').value='';
+      document.querySelector('#screen-create .select-field').value='Ücretsiz';
+      playerCount=2; document.getElementById('pc-num').textContent='2';
+      document.querySelectorAll('.sport-option').forEach(o=>o.classList.remove('selected'));
+      document.querySelector('.sport-option').classList.add('selected');
+      selectedSport='futbol';
+      btn.innerHTML='<span>🚀</span> Oyunu Yayınla'; btn.style.opacity='1'; btn.disabled=false; btn.style.background='var(--orange)';
+      uStats.created++; addXP(100);
+      showToast('🎉 Oyunun yayınlandı! +100 XP','success');
+      loadGamesFromAPI();
+      navTo('home');
+    } else {
+      showToast('❌ '+(data.error||'İlan oluşturulamadı'),'error');
+      btn.innerHTML='<span>🚀</span> Oyunu Yayınla'; btn.style.opacity='1'; btn.disabled=false;
+    }
+  }).catch(function(){
+    showToast('❌ Sunucuya bağlanılamadı','error');
+    btn.innerHTML='<span>🚀</span> Oyunu Yayınla'; btn.style.opacity='1'; btn.disabled=false;
+  });
+}
+
+// =========== OYUN LİSTESİ RENDER ===========
+function renderGamesList(filterSport){
+  const list=document.getElementById('games-list');
+  const emptyState=document.getElementById('empty-state');
+  const filtered = filterSport && filterSport!=='all'
+    ? GAMES.filter(g=>g.sport===filterSport)
+    : GAMES;
+
+  if(filtered.length===0){
+    // Kartları temizle, empty state göster
+    Array.from(list.querySelectorAll('.game-card')).forEach(c=>c.remove());
+    if(emptyState) emptyState.style.display='flex';
+    document.getElementById('game-count').textContent='0 oyun';
+    return;
+  }
+  if(emptyState) emptyState.style.display='none';
+
+  // Sadece gerçek kartları yeniden yaz
+  Array.from(list.querySelectorAll('.game-card')).forEach(c=>c.remove());
+
+  filtered.forEach(function(g){
+    const idx=GAMES.indexOf(g);
+    const emptySlots=[];
+    for(let i=0;i<Math.min(g.players.length,5);i++) emptySlots.push('<div class="slot filled">👤</div>');
+    for(let i=0;i<Math.min(g.empty,5-g.players.length);i++) emptySlots.push('<div class="slot empty">+</div>');
+    const card=document.createElement('div');
+    card.className='game-card';
+    card.dataset.sport=g.sport;
+    card.style.animationDelay=(filtered.indexOf(g)*0.07)+'s';
+    card.onclick=function(){openDetail(idx);};
+    card.innerHTML=
+      '<div class="card-top">'
+        +'<div class="card-sport">'
+          +'<div class="sport-icon '+g.sport+'">'+g.icon+'</div>'
+          +'<div><div class="card-title">'+g.title+'</div><div class="card-host">'+g.host+' tarafından</div></div>'
+        +'</div>'
+        +'<div class="badge '+(g.full?'dolu':'acik')+'">'+(g.full?'Dolu':'Açık')+'</div>'
+      +'</div>'
+      +'<div class="card-meta">'
+        +'<div class="meta-item">📍 '+(g.loc||g.dist)+'</div>'
+        +'<div class="meta-dot"></div>'
+        +'<div class="meta-item">🕐 '+g.date+' '+g.time+'</div>'
+        +'<div class="meta-dot"></div>'
+        +'<div class="meta-item">💰 '+g.price+'</div>'
+      +'</div>'
+      +'<div class="card-bottom">'
+        +'<div style="display:flex;align-items:center">'
+          +'<div class="player-slots">'+emptySlots.join('')+'</div>'
+          +'<span class="slot-info">'+( g.full ? '<span style="color:var(--muted)">Yer kalmadı</span>' : '<strong>'+g.empty+' yer</strong> açık' )+'</span>'
+        +'</div>'
+        +(g.full ? '<button class="join-btn full" disabled>Dolu</button>' : '<button class="join-btn" onclick="event.stopPropagation();quickJoin(event,this)">Katıl</button>')
+      +'</div>';
+    list.appendChild(card);
+  });
+  document.getElementById('game-count').textContent=filtered.length+' oyun';
+}
+
+// =========== SEARCH ===========
+function handleSearch(val){
+  const def=document.getElementById('search-default');
+  const res=document.getElementById('search-results');
+  const list=document.getElementById('search-results-list');
+  if(!val.trim()){def.style.display='';res.style.display='none';return;}
+  def.style.display='none'; res.style.display='';
+  document.getElementById('search-results-title').textContent='"'+val+'" için sonuçlar';
+  // Önce yüklü GAMES'de ara, yoksa API'den çek
+  var filtered=GAMES.filter(g=>
+    (g.title&&g.title.toLowerCase().includes(val.toLowerCase()))||
+    (g.sport&&g.sport.toLowerCase().includes(val.toLowerCase()))||
+    (g.host&&g.host.toLowerCase().includes(val.toLowerCase()))||
+    (g.loc&&g.loc.toLowerCase().includes(val.toLowerCase()))
+  );
+  list.innerHTML='';
+  if(filtered.length===0){list.innerHTML='<div style="text-align:center;color:var(--muted);padding:30px;font-size:14px;">😕 Sonuç bulunamadı</div>';return;}
+  filtered.forEach(function(g,i){
+    var idx=GAMES.indexOf(g);
+    list.innerHTML+='<div class="result-card" onclick="openDetail('+idx+')" style="animation-delay:'+(i*0.08)+'s">'
+      +'<div class="rc-icon sport-icon '+g.sport+'">'+g.icon+'</div>'
+      +'<div class="rc-info"><strong>'+g.title+'</strong><span>📍 '+(g.loc||g.dist)+' · 🕐 '+g.date+' '+g.time+'</span></div>'
+      +'<div class="rc-badge '+(g.full?'dolu':'acik')+' badge">'+(g.full?'Dolu':'Açık')+'</div>'
+      +'</div>';
+  });
+}
+function searchBySport(name){
+  document.getElementById('search-input').value=name;
+  handleSearch(name);
+}
+function toggleFchip(el){el.classList.toggle('active');}
+
+// =========== ŞİFRE SIFIRLAMA ===========
+function showForgotScreen(){
+  document.getElementById('forgot-step1').style.display='flex';
+  document.getElementById('forgot-step2').style.display='none';
+  document.getElementById('forgot-title').textContent='Şifreni Sıfırla';
+  document.getElementById('forgot-subtitle').textContent='E-posta adresini gir, sana sıfırlama kodu gönderelim.';
+  goTo('forgot');
+}
+async function sendForgotOtp(){
+  const email=document.getElementById('forgot-email').value.trim();
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    setFS('forgot-email','error');setErr('forgot-email',true,'Geçerli bir e-posta girin.');return;
+  }
+  const btn=document.getElementById('btn-forgot-send');
+  btn.innerHTML='<span>⏳</span> Gönderiliyor...'; btn.disabled=true;
+  try{
+    const res=await fetch(API+'/api/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    const data=await res.json();
+    if(!data.success && !data.ok) throw new Error(data.error);
+    currentOtpEmail=email;
+    document.getElementById('forgot-subtitle').textContent=email+' adresine kod gönderdik.';
+    document.getElementById('forgot-step1').style.display='none';
+    document.getElementById('forgot-step2').style.display='flex';
+    initForgotOtpBoxes();
+    showToast('📧 Sıfırlama kodu gönderildi!','success');
+  }catch(err){
+    showToast('❌ '+(err.message||'Gönderilemedi'),'error');
+  }finally{
+    btn.innerHTML='<span>📧</span> Kod Gönder'; btn.disabled=false;
+  }
+}
+function initForgotOtpBoxes(){
+  for(let i=0;i<6;i++){
+    const box=document.getElementById('fotp-'+i);
+    if(!box)continue;
+    box.value=''; box.classList.remove('filled','error');
+    const idx=i;
+    box.oninput=function(){
+      this.value=this.value.replace(/\D/g,'').slice(0,1);
+      if(this.value){this.classList.add('filled');if(idx<5)document.getElementById('fotp-'+(idx+1)).focus();}
+    };
+    box.onkeydown=function(e){if(e.key==='Backspace'&&!this.value&&idx>0)document.getElementById('fotp-'+(idx-1)).focus();};
+  }
+  document.getElementById('fotp-0').focus();
+}
+async function resetPassword(){
+  const code=[0,1,2,3,4,5].map(i=>document.getElementById('fotp-'+i).value).join('');
+  const newpass=document.getElementById('forgot-newpass').value;
+  if(code.length<6){showToast('❌ 6 haneli kodu tam gir','error');return;}
+  if(!newpass||newpass.length<6){setFS('forgot-newpass','error');setErr('forgot-newpass',true,'Şifre en az 6 karakter olmalı.');return;}
+  const btn=document.getElementById('btn-forgot-reset');
+  btn.innerHTML='<span>⏳</span> Güncelleniyor...'; btn.disabled=true;
+  try{
+    const res=await fetch(API+'/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:currentOtpEmail,code,newPassword:newpass})});
+    const data=await res.json();
+    if(!data.success && !data.ok) throw new Error(data.error);
+    showToast('✅ Şifren güncellendi! Giriş yapabilirsin.','success');
+    document.getElementById('login-email').value=currentOtpEmail;
+    goTo('auth');
+    setTimeout(()=>switchTab('login'),300);
+  }catch(err){
+    document.getElementById('fotp-error-msg').textContent=err.message||'Kod yanlış.';
+    document.getElementById('fotp-error-msg').classList.add('show');
+  }finally{
+    btn.innerHTML='<span>✅</span> Şifremi Güncelle'; btn.disabled=false;
+  }
+}
+
+// =========== PROFILE ===========
+function logout(){
+  if(confirm('Çıkış yapmak istediğinden emin misin?')){
+    localStorage.removeItem('probul_email');
+    localStorage.removeItem('probul_name');
+    navTo('auth');
+    document.getElementById('btn-register').innerHTML='<span>🚀</span> Hesap Oluştur';
+    document.getElementById('btn-register').disabled=false; document.getElementById('btn-register').style.opacity='1'; document.getElementById('btn-register').style.background='var(--orange)';
+    document.getElementById('btn-login').innerHTML='<span>🔑</span> Giriş Yap';
+    document.getElementById('btn-login').disabled=false; document.getElementById('btn-login').style.opacity='1'; document.getElementById('btn-login').style.background='var(--orange)';
+    document.getElementById('login-email').value='';
+    document.getElementById('login-pass').value='';
+    photoSelected=false; userPhoto=null; screenHistory=[];
+  }
+}
+
+
+// =========== PLAYERS DATA ===========
+const PLAYERS = []; // Gerçek kullanıcılar API'den yüklenir
+
+// =========== ROZET VERİSİ ===========
+const ALL_BADGES = [
+  {e:'🔥',n:'Ateşli',desc:'10 oyun oyna',r:'orange',unlocked:true},
+  {e:'⚽',n:'Halısaha',desc:'5 halısaha oyunu',r:'orange',unlocked:true},
+  {e:'🀄',n:'Okey',desc:'5 okey oyunu',r:'bronze',unlocked:true},
+  {e:'👑',n:'Lider',desc:'10 oyun oluştur',r:'gold',unlocked:true},
+  {e:'🤝',n:'Sosyal',desc:'20 farklı oyuncu',r:'silver',unlocked:true},
+  {e:'💎',n:'Elit',desc:'50 oyun tamamla',r:'special',unlocked:false},
+  {e:'🌟',n:'Yıldız',desc:'4.8+ puan al',r:'gold',unlocked:false},
+  {e:'⚡',n:'Hızlı',desc:'İlk 1 saatte katıl',r:'bronze',unlocked:false},
+];
+
+// =========== PROFIL ROZETLER ===========
+function renderProfileBadges(){
+  const grid=document.getElementById('profile-badges-grid');
+  if(!grid)return;
+  grid.innerHTML='';
+  ALL_BADGES.forEach(function(b){
+    var onclickAttr = b.unlocked
+      ? 'onclick="showBadgePreview(\'' + b.e + '\',\'' + b.n + '\',\'' + b.desc + '\')"'
+      : 'onclick="showToast(\'Bu rozeti henüz kazanmadın!\',\'error\')"';
+    grid.innerHTML += '<div class="badge-item ' + (b.unlocked?'':'locked') + '" ' + onclickAttr + '>'
+      + '<div class="badge-icon-wrap ' + b.r + '"><div class="badge-shine"></div>' + b.e + '</div>'
+      + '<div class="badge-label">' + b.n + '</div>'
+      + '</div>';
+  });
+}
+
+function showBadgePreview(emoji,name,desc){
+  document.getElementById('buc-icon').textContent=emoji;
+  document.getElementById('buc-name').textContent=name;
+  document.getElementById('buc-desc').textContent=desc;
+  document.getElementById('buc-label').textContent='✨ Rozet Bilgisi';
+  document.getElementById('badge-unlock-overlay').style.display='flex';
+}
+
+// =========== ROZET UNLOCK ===========
+function unlockBadge(emoji,name,desc){
+  document.getElementById('buc-icon').textContent=emoji;
+  document.getElementById('buc-name').textContent=name;
+  document.getElementById('buc-desc').textContent=desc;
+  document.getElementById('buc-label').textContent='🎉 Yeni Rozet Kazandın!';
+  const overlay=document.getElementById('badge-unlock-overlay');
+  overlay.style.display='flex';
+  // Confetti dots
+  const card=overlay.querySelector('.badge-unlock-card');
+  const colors=['#FF5C1A','#FFD234','#4da6ff','#2a9d5c','#ff6b9d'];
+  for(let i=0;i<12;i++){
+    const dot=document.createElement('div');
+    dot.className='confetti-dot';
+    dot.style.cssText=`background:${colors[i%colors.length]};left:${10+i*7}%;top:${10+Math.random()*20}%;animation-delay:${Math.random()*0.5}s;animation-duration:${1+Math.random()*0.5}s;`;
+    card.appendChild(dot);
+    setTimeout(()=>dot.remove(),2000);
+  }
+}
+function closeBadgeUnlock(){
+  document.getElementById('badge-unlock-overlay').style.display='none';
+}
+
+// =========== OYUNCU PROFİL KARTI ===========
+var pmCurrentPlayer = null;
+
+function openPlayerModal(idx){
+  const p=PLAYERS[idx];
+  if(!p) return;
+  pmCurrentPlayer = p;
+  var avatar = p.profile_photo
+    ? '<img src="'+p.profile_photo+'" style="width:60px;height:60px;border-radius:50%;object-fit:cover">'
+    : (p.emoji||'👤');
+  document.getElementById('pm-avatar').innerHTML=avatar;
+  document.getElementById('pm-name').textContent=p.name||p.fullName||'Oyuncu';
+  document.getElementById('pm-location').textContent='📍 '+(p.location||'Türkiye');
+  document.getElementById('pm-games').textContent=p.gamesCount||p.games||0;
+  document.getElementById('pm-rating').textContent=p.rating||'—';
+  document.getElementById('pm-level').textContent=p.level||1;
+  document.getElementById('pm-sport-tags').innerHTML='<div class="pm-sport-tag">🏅</div>';
+  document.getElementById('pm-badges-row').innerHTML='<div style="color:var(--muted);font-size:13px;">Henüz rozet yok</div>';
+  document.getElementById('pm-score-bars').innerHTML='';
+  document.getElementById('pm-reviews').innerHTML='<div style="color:var(--muted);font-size:13px;">Henüz yorum yok</div>';
+  document.getElementById('player-modal-overlay').style.display='flex';
+}
+
+// Kullanıcı ID ile profil aç
+function openPlayerById(userId, userName, userPhoto){
+  pmCurrentPlayer = {id: userId, name: userName, profile_photo: userPhoto};
+  var avatar = userPhoto
+    ? '<img src="'+userPhoto+'" style="width:60px;height:60px;border-radius:50%;object-fit:cover">'
+    : '👤';
+  document.getElementById('pm-avatar').innerHTML=avatar;
+  document.getElementById('pm-name').textContent=userName||'Oyuncu';
+  document.getElementById('pm-location').textContent='📍 Türkiye';
+  document.getElementById('pm-games').textContent='—';
+  document.getElementById('pm-rating').textContent='—';
+  document.getElementById('pm-level').textContent='—';
+  document.getElementById('pm-sport-tags').innerHTML='';
+  document.getElementById('pm-badges-row').innerHTML='<div style="color:var(--muted);font-size:13px;">Yükleniyor...</div>';
+  document.getElementById('pm-score-bars').innerHTML='';
+  document.getElementById('pm-reviews').innerHTML='';
+  document.getElementById('player-modal-overlay').style.display='flex';
+  // Gerçek istatistikleri çek
+  fetch(API+'/api/users/'+userId+'/stats').then(r=>r.json()).then(function(d){
+    if(d.success){
+      document.getElementById('pm-games').textContent=d.stats.gamesJoined;
+    }
+  }).catch(function(){});
+}
+
+function pmSendMessage(){
+  if(!pmCurrentPlayer || !pmCurrentPlayer.id){ showToast('❌ Kullanıcı bulunamadı','error'); return; }
+  closePlayerModal();
+  messageListingOwner(pmCurrentPlayer.id, pmCurrentPlayer.name);
+}
+function closePlayerModal(e){
+  if(!e||e.target===document.getElementById('player-modal-overlay'))
+    document.getElementById('player-modal-overlay').style.display='none';
+}
+
+// =========== ROZET TOAST (pop-up yok, bildirim olarak gelir) ===========
+function showBadgeToast(emoji, name, desc, label){
+  // Varsa önce kaldır
+  var existing = document.querySelector('.badge-toast');
+  if(existing){ existing.remove(); }
+
+  var toast = document.createElement('div');
+  toast.className = 'badge-toast';
+  toast.innerHTML =
+    '<div class="bt-icon">'+emoji+'</div>'
+    +'<div class="bt-info">'
+      +'<div class="bt-label">'+(label||'🎉 Yeni Rozet!')+'</div>'
+      +'<div class="bt-name">'+name+'</div>'
+      +'<div class="bt-desc">'+desc+'</div>'
+    +'</div>'
+    +'<button class="bt-close" id="bt-close-btn">✕</button>';
+
+  document.querySelector('.phone').appendChild(toast);
+
+  // Kapat butonu
+  toast.querySelector('#bt-close-btn').addEventListener('click', function(){
+    dismissBadgeToast(toast);
+  });
+
+  // 5 saniye sonra otomatik git
+  var autoTimer = setTimeout(function(){ dismissBadgeToast(toast); }, 5000);
+  toast._autoTimer = autoTimer;
+}
+function dismissBadgeToast(toast){
+  if(!toast || !toast.parentNode) return;
+  clearTimeout(toast._autoTimer);
+  toast.classList.add('hiding');
+  setTimeout(function(){ if(toast.parentNode) toast.remove(); }, 320);
+}
+// Geriye dönük uyumluluk (eski çağrılar)
+function unlockBadge(emoji,name,desc){ showBadgeToast(emoji,name,desc,'🎉 Yeni Rozet!'); }
+function showBadgePreview(emoji,name,desc){ showBadgeToast(emoji,name,desc,'✨ Rozet Bilgisi'); }
+function closeBadgeUnlock(){ var t=document.querySelector('.badge-toast'); if(t) dismissBadgeToast(t); }
+
+// =========== PUANLAMA ===========
+var ratingScores = {};
+var currentRatingGameIdx = -1;
+
+function closeRatingModal(e){
+  if(e && e.target !== document.getElementById('rating-overlay')) return;
+  document.getElementById('rating-overlay').style.display='none';
+}
+
+function openRatingModal(gameIdx){
+  var g = GAMES[gameIdx];
+  if(!g) return;
+
+  ratingScores = {};
+  var container = document.getElementById('rm-players');
+  container.innerHTML = '';
+
+  // Gerçek katılımcılar: ilanı açan + katılanlar (kendim hariç)
+  var participants = g.participants || [];
+  if(participants.length === 0){
+    // Katılımcı yoksa modal açma
+    showToast('Değerlendirmek için başka katılımcı yok.','error');
+    return;
+  }
+
+  document.getElementById('rm-subtitle').textContent = participants.length+' oyuncuyu değerlendir';
+
+  participants.forEach(function(p, idx){
+    ratingScores[idx] = 0;
+    var tags = ['👍 Dakik','⚡ Enerjik','🤝 Takım Oyuncusu','😄 Eğlenceli','💪 Yetenekli','🎯 Odaklı'];
+    container.innerHTML +=
+      '<div class="rm-player">'
+        +'<div class="rm-player-top">'
+          +'<div class="rm-player-avatar">'+( p.photo ? '<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">' : '👤' )+'</div>'
+          +'<div class="rm-player-info"><strong>'+p.name+'</strong><span>'+( p.role==='host' ? '👑 İlan Sahibi' : '👤 Katılımcı' )+'</span></div>'
+        +'</div>'
+        +'<div class="rm-star-row" id="rms-'+idx+'">'
+          +[1,2,3,4,5].map(function(s){ return '<span class="rm-star" data-idx="'+idx+'" data-star="'+s+'">⭐</span>'; }).join('')
+        +'</div>'
+        +'<div class="rm-tags">'
+          +tags.map(function(t){ return '<div class="rm-tag" onclick="this.classList.toggle(\'active\')">'+t+'</div>'; }).join('')
+        +'</div>'
+      +'</div>';
+  });
+
+  // Star click'lerini bağla
+  container.querySelectorAll('.rm-star').forEach(function(star){
+    star.addEventListener('click', function(){
+      var idx = parseInt(this.dataset.idx);
+      var s = parseInt(this.dataset.star);
+      setRating(idx, s);
+    });
+  });
+
+  document.getElementById('rating-overlay').style.display='flex';
+}
+
+function setRating(playerIdx,stars){
+  ratingScores[playerIdx]=stars;
+  var starsEl=document.getElementById('rms-'+playerIdx);
+  if(!starsEl)return;
+  starsEl.querySelectorAll('.rm-star').forEach(function(s,i){
+    s.classList.toggle('active',i<stars);
+    s.style.opacity=i<stars?'1':'0.3';
+  });
+}
+
+function submitRatings(){
+  document.getElementById('rating-overlay').style.display='none';
+  showToast('⭐ Değerlendirmeler kaydedildi! +50 XP','success');
+  // Değerlendirici rozeti — sadece ilk defa
+  if(!window._hasRatingBadge){
+    window._hasRatingBadge = true;
+    setTimeout(function(){ showBadgeToast('🤝','Değerlendirici','İlk oyuncu değerlendirmeni yaptın!','🎉 Yeni Rozet!'); }, 800);
+  }
+}
+
+// =========== OVERRIDE detailJoin ===========
+const _origDetailJoin = detailJoin;
+detailJoin = function(){
+  var gameIdx = GAMES.findIndex(function(g){ return g.title === document.getElementById('detail-title').textContent; });
+  var game = gameIdx>=0 ? GAMES[gameIdx] : null;
+  var btn=document.getElementById('detail-join-btn');
+  var currentUser=JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!currentUser.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  if(!game){ showToast('❌ İlan bulunamadı','error'); return; }
+  btn.innerHTML='<span>⏳</span> Katılıyor...'; btn.disabled=true;
+  fetch(API+'/api/listings/'+game.id+'/join',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({userId:currentUser.id})
+  }).then(r=>r.json()).then(function(data){
+    if(data.success){
+      btn.innerHTML='<span>✅</span> Katıldın!';
+      btn.style.background='var(--green)';
+      btn.style.boxShadow='0 12px 32px rgba(42,157,92,0.35)';
+      showToast('🎉 Oyuna katıldın! +20 XP','success');
+      uStats.games++; addXP(20);
+      loadGamesFromAPI();
+      setTimeout(function(){ showRatingNotification(gameIdx); }, 8000);
+    } else {
+      btn.innerHTML='<span>🎯</span> Oyuna Katıl'; btn.disabled=false;
+      showToast('❌ '+(data.error||'Katılınamadı'),'error');
+    }
+  }).catch(function(){
+    btn.innerHTML='<span>🎯</span> Oyuna Katıl'; btn.disabled=false;
+    showToast('❌ Bağlantı hatası','error');
+  });
+};
+
+function showRatingNotification(gameIdx){
+  var existing = document.querySelector('.badge-toast');
+  if(existing) existing.remove();
+
+  var toast = document.createElement('div');
+  toast.className = 'badge-toast';
+  toast.style.borderColor = 'rgba(255,210,52,0.4)';
+  toast.innerHTML =
+    '<div class="bt-icon">⭐</div>'
+    +'<div class="bt-info">'
+      +'<div class="bt-label" style="color:#FFD234;">OYUN BİTTİ</div>'
+      +'<div class="bt-name">Değerlendirme zamanı!</div>'
+      +'<div class="bt-desc">Birlikte oynadığın kişileri puanla.</div>'
+    +'</div>'
+    +'<button id="rating-notif-btn" style="background:var(--orange);border:none;color:white;padding:8px 12px;border-radius:10px;cursor:pointer;font-family:Syne,sans-serif;font-size:12px;font-weight:700;flex-shrink:0;">Değerlendir</button>';
+
+  document.querySelector('.phone').appendChild(toast);
+
+  toast.querySelector('#rating-notif-btn').addEventListener('click', function(){
+    dismissBadgeToast(toast);
+    openRatingModal(gameIdx);
+  });
+
+  // 30 saniye sonra otomatik kapat
+  var t = setTimeout(function(){ dismissBadgeToast(toast); }, 30000);
+  toast._autoTimer = t;
+}
+
+// =========== OVERRIDE goToHome to render badges + games ===========
+const _origGoToHome = goToHome;
+goToHome = function(){
+  _origGoToHome();
+  loadGamesFromAPI();
+  renderProfileBadges();
+  loadRealProfileStats();
+  refreshProfileStats();
+  // Selamlama
+  var h=new Date().getHours();
+  var gr=h<12?'Günaydın':h<18?'İyi günler':'İyi akşamlar';
+  var nm=document.getElementById('profileName').textContent;
+  var grEl=document.getElementById('home-greeting');
+  if(grEl && nm && nm!=='Kullanıcı') grEl.textContent=gr+', '+nm.split(' ')[0]+'! 👋';
+  // Gerçek çevrimiçi sayısı API'den
+  fetch(API+'/api/stats').then(r=>r.json()).then(function(d){
+    var onEl=document.getElementById('online-count');
+    if(onEl) onEl.textContent=(d.onlineUsers||0)+' çevrimiçi';
+  }).catch(function(){});
+  if(window._justRegistered){
+    window._justRegistered = false;
+    setTimeout(function(){ showBadgeToast('🔥','Hoş Geldin!','Pro-Bul\'a katıldın, haydi oyna!','🎉 Yeni Rozet!'); }, 1200);
+  }
+};
+
+
+// =========== PROFİL DÜZENLEME ===========
+function openProfileEdit(){
+  var u=JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  document.getElementById('pe-name').value=u.name||u.fullName||'';
+  document.getElementById('pe-phone').value=u.phone||'';
+  document.getElementById('pe-bio').value=u.bio||'';
+  document.getElementById('pe-location').value=u.location||'';
+  document.getElementById('profile-edit-overlay').style.display='flex';
+}
+function closeProfileEdit(){
+  document.getElementById('profile-edit-overlay').style.display='none';
+}
+async function saveProfileEdit(){
+  var u=JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  var name=document.getElementById('pe-name').value.trim();
+  var phone=document.getElementById('pe-phone').value.trim();
+  var bio=document.getElementById('pe-bio').value.trim();
+  var location=document.getElementById('pe-location').value.trim();
+  if(!name){ showToast('❌ İsim boş olamaz!','error'); return; }
+  var btn=document.getElementById('pe-save-btn');
+  btn.textContent='Kaydediliyor...'; btn.disabled=true;
+  try{
+    var res=await fetch(API+'/api/profile/'+u.id,{
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,phone,bio,location,profilePhoto:u.profilePhoto,favoriteSports:u.favoriteSports||[]})
+    });
+    var data=await res.json();
+    if(data.success){
+      u.name=name; u.fullName=name; u.phone=phone; u.bio=bio; u.location=location;
+      localStorage.setItem('currentUser',JSON.stringify(u));
+      localStorage.setItem('probul_name',name);
+      document.getElementById('profileName').textContent=name;
+      closeProfileEdit();
+      showToast('✅ Profil güncellendi!','success');
+    } else { showToast('❌ '+(data.error||'Hata'),'error'); }
+  }catch(e){ showToast('❌ Bağlantı hatası','error'); }
+  finally{ btn.textContent='Kaydet'; btn.disabled=false; }
+}
+
+
+// =========== GERÇEK PROFİL İSTATİSTİKLERİ ===========
+async function loadRealProfileStats(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/stats');
+    var data = await res.json();
+    if(data.success){
+      var s = data.stats;
+      var items = document.querySelectorAll('.stat-item .stat-num');
+      if(items[0]) items[0].textContent = s.gamesJoined;
+      // puan fixed for now
+      if(items[2]) items[2].textContent = s.friends;
+      uStats.games = s.gamesJoined;
+      uStats.created = s.gamesCreated;
+      saveStats();
+    }
+  } catch(e){}
+  // Konum güncelle
+  var locEl = document.querySelector('.profile-loc');
+  if(locEl && u.location) locEl.textContent = '📍 '+u.location;
+}
+
+// =========== KONUMU YENİLE ===========
+function refreshLocation(){
+  if(!navigator.geolocation){ showToast('⚠️ Tarayıcınız konumu desteklemiyor','error'); return; }
+  showToast('📍 Konum alınıyor...','success');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude+'&format=json&accept-language=tr')
+      .then(r=>r.json())
+      .then(function(d){
+        var city = d.address.city||d.address.town||d.address.district||'Türkiye';
+        var district = d.address.suburb||d.address.neighbourhood||'';
+        var locName = district ? district+', '+city : city;
+        userLocation.name = locName;
+        var locEl = document.querySelector('.profile-loc');
+        if(locEl) locEl.textContent = '📍 '+locName;
+        var mapLabel = document.querySelector('.map-label');
+        if(mapLabel) mapLabel.innerHTML = '<div class="map-label-dot"></div>'+locName;
+        var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+        if(u.id){
+          fetch(API+'/api/users/'+u.id+'/location',{
+            method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({latitude:pos.coords.latitude, longitude:pos.coords.longitude, locationName:locName})
+          });
+          u.location = locName;
+          localStorage.setItem('currentUser', JSON.stringify(u));
+        }
+        showToast('✅ Konum güncellendi: '+locName,'success');
+      });
+  }, function(){ showToast('❌ Konum alınamadı','error'); });
+}
+
+// =========== ARKADAŞ SİSTEMİ ===========
+async function loadFriendsSection(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  loadFriendRequests();
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/friendlist');
+    var data = await res.json();
+    var section = document.getElementById('friends-section');
+    if(!section) return;
+    if(!data.success || !data.friends || data.friends.length === 0){
+      section.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Henüz arkadaşın yok.<br>Yukarıdan kullanıcı ara ve arkadaşlık isteği gönder!</div>';
+      return;
+    }
+
+async function loadFriendRequests(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/friend-requests');
+    var data = await res.json();
+    var countEl = document.getElementById('friend-req-count');
+    var listEl = document.getElementById('friend-requests-list');
+    if(!data.requests || data.requests.length === 0){
+      if(countEl) countEl.style.display='none';
+      if(listEl) listEl.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:8px;">Bekleyen istek yok</div>';
+      return;
+    }
+    if(countEl){ countEl.textContent=data.requests.length; countEl.style.display='inline'; }
+    if(listEl){
+      listEl.innerHTML = data.requests.map(function(r){
+        var av = r.profile_photo?'<img src="'+r.profile_photo+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover">':'👤';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'
+          +'<div style="width:36px;height:36px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">'+av+'</div>'
+          +'<div style="flex:1;font-size:14px;font-weight:600;">'+r.name+'</div>'
+          +'<button onclick="respondFriendReq('+r.friendship_id+',\'accept\')" style="padding:5px 10px;background:var(--green);border:none;border-radius:8px;color:white;font-size:12px;font-weight:700;cursor:pointer;margin-right:4px;">✓</button>'
+          +'<button onclick="respondFriendReq('+r.friendship_id+',\'reject\')" style="padding:5px 10px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;">✕</button>'
+          +'</div>';
+      }).join('');
+    }
+  } catch(e){ console.error('Friend requests error:',e); }
+}
+
+function showFriendRequestsPanel(){
+  var panel = document.getElementById('friend-requests-panel');
+  if(!panel) return;
+  var isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : 'block';
+  if(!isVisible) loadFriendRequests();
+}
+
+async function respondFriendReq(friendshipId, action){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/friendships/'+friendshipId, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action, userId: u.id })
+    });
+    var data = await res.json();
+    if(data.success){
+      showToast(action==='accept'?'✅ Arkadaşlık kabul edildi!':'✕ İstek reddedildi', action==='accept'?'success':'error');
+      loadFriendRequests();
+      if(action==='accept') loadFriendsSection();
+    }
+  } catch(e){ showToast('❌ Hata oluştu','error'); }
+}
+
+async function removeFriend(friendshipId, name){
+  if(!confirm(name+' arkadaşlıktan çıkarılsın mı?')) return;
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/friendships/'+friendshipId, {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: u.id })
+    });
+    var data = await res.json();
+    if(data.success){ showToast('✅ Arkadaşlıktan çıkarıldı','success'); loadFriendsSection(); }
+  } catch(e){ showToast('❌ Hata oluştu','error'); }
+}
+
+var searchDebounce = null;
+async function searchUsers(val){
+  var resultsEl = document.getElementById('friend-search-results');
+  if(!resultsEl) return;
+  if(!val || val.trim().length < 2){ resultsEl.style.display='none'; return; }
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(async function(){
+    try {
+      var res = await fetch(API+'/api/users/search?q='+encodeURIComponent(val)+'&userId='+(u.id||0));
+      var data = await res.json();
+      resultsEl.style.display='block';
+      if(!data.users || data.users.length === 0){
+        resultsEl.innerHTML='<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center;">Kullanıcı bulunamadı</div>';
+        return;
+      }
+      resultsEl.innerHTML = data.users.map(function(user){
+        var safeName = (user.name||'').replace(/'/g,"\'");
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);">'
+          +'<div style="width:36px;height:36px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">'+(user.profile_photo?'<img src="'+user.profile_photo+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover">':'👤')+'</div>'
+          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:var(--text)">'+user.name+'</div><div style="font-size:11px;color:var(--muted)">'+(user.location||'')+'</div></div>'
+          +'<button onclick="sendFriendRequest('+user.id+',\''+safeName+'\',this)" style="padding:5px 12px;background:var(--orange);border:none;border-radius:8px;color:white;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;">+ Ekle</button>'
+          +'</div>';
+      }).join('');
+    } catch(e){ console.error('Search error:',e); }
+  }, 400);
+}
+
+document.addEventListener('click', function(e){
+  var input = document.getElementById('friend-search-input');
+  var results = document.getElementById('friend-search-results');
+  if(results && input && !input.contains(e.target) && !results.contains(e.target)){
+    results.style.display='none';
+  }
+});
+
+async function sendFriendRequest(targetId, targetName, btn){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  if(String(u.id)===String(targetId)){ showToast('❌ Kendinize istek gönderemezsiniz!','error'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Gönderiliyor...'; }
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/friend-request', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ targetId })
+    });
+    var data = await res.json();
+    if(data.success){
+      if(btn){ btn.textContent='✓ Gönderildi'; btn.style.background='var(--green)'; }
+      showToast('🤝 Arkadaşlık isteği gönderildi!','success');
+    } else {
+      if(btn){ btn.disabled=false; btn.textContent='+ Ekle'; }
+      showToast('⚠️ '+(data.error||'İstek gönderilemedi'),'error');
+    }
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='+ Ekle'; } showToast('❌ Hata','error'); }
+}
+
+    section.innerHTML = data.friends.map(function(f){
+      var avatar = f.profile_photo 
+        ? '<img src="'+f.profile_photo+'" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">'
+        : '<div style="width:44px;height:44px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid var(--border)">👤</div>';
+      var onlineDot = f.is_online ? '<div style="position:absolute;bottom:0;right:0;width:11px;height:11px;background:var(--green);border-radius:50%;border:2px solid var(--dark2)"></div>' : '';
+      var safeName = (f.name||'').replace(/'/g,"\\'");
+      return '<div onclick="openMessageTo('+f.id+',\''+safeName+'\')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;">'
+        +'<div style="position:relative">'+avatar+onlineDot+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="font-weight:600;font-size:14px">'+f.name+'</div>'
+          +'<div style="font-size:12px;color:var(--muted)">'+( f.is_online ? '🟢 Çevrimiçi' : '⚫ Çevrimdışı' )+'</div>'
+        +'</div>'
+        +'<button onclick="event.stopPropagation();openMessageTo('+f.id+',\''+safeName+'\')" style="padding:7px 14px;background:var(--orange);border:none;border-radius:10px;color:white;font-size:12px;font-weight:700;cursor:pointer;">💬</button>'
+        +'</div>';
+    }).join('');
+  } catch(e){ console.error('Friends error:',e); }
+}
+
+// =========== BİRİNE MESAJ GÖNDER (index içinden) ===========
+function openMessageTo(userId, userName){
+  // currentUser'ı localStorage'a kaydet, messages.html'de açılsın
+  localStorage.setItem('openChatWith', JSON.stringify({id:userId, name:userName}));
+  window.location.href = '/messages.html';
+}
+
+// =========== İLAN SAHİBİNE MESAJ ===========
+function messageListingOwner(ownerId, ownerName){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  if(u.id == ownerId){ showToast('❌ Kendi ilanına mesaj atamazsın!','error'); return; }
+  localStorage.setItem('openChatWith', JSON.stringify({id:ownerId, name:ownerName}));
+  window.location.href = '/messages.html';
+}
+
+
+
+function detailMsgOwner(){
+  var gameIdx = GAMES.findIndex(function(g){ return g.title === document.getElementById('detail-title').textContent; });
+  var g = gameIdx>=0 ? GAMES[gameIdx] : null;
+  if(!g || !g.userId){ showToast('❌ İlan sahibi bulunamadı','error'); return; }
+  messageListingOwner(g.userId, g.host);
+}
+
+// =========== TOAST ===========
+function showToast(msg,type){
+  if(!type)type='success';
+  const existing=document.querySelector('.toast'); if(existing)existing.remove();
+  const icon=type==='success'?'✅':'❌';
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.innerHTML='<span>'+icon+'</span><span>'+msg+'</span>';
+  document.querySelector('.phone').appendChild(t);
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},300);},2800);
+}
+
+// =========== SAAT ===========
+function updateClock(){
+  var now=new Date();
+  var el=document.getElementById('statusbar-clock');
+  if(el) el.textContent=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+}
+
+// =========== OYUNLARI API'DEN YÜKLE ===========
+function saveGames(){} // API tabanlı, localStorage gerekmez
+function loadGames(){ loadGamesFromAPI(); }
+async function loadGamesFromAPI(filterSport){
+  try{
+    GAMES.length=0;
+    var url=API+'/api/listings';
+    if(filterSport && filterSport!=='all') url+='?sport='+filterSport;
+    var res=await fetch(url);
+    var data=await res.json();
+    if(data.success && data.listings){
+      data.listings.forEach(function(l){
+        var icon={futbol:'⚽',basketbol:'🏀',basket:'🏀',tenis:'🎾',okey:'🀄',voleybol:'🏐',yüzme:'🏊',koşu:'🏃'}[l.sport]||'🏅';
+        var dateStr=l.date?new Date(l.date).toLocaleDateString('tr-TR',{day:'numeric',month:'short'}):'-';
+        var today=new Date(); today.setHours(0,0,0,0);
+        var ld=new Date(l.date); ld.setHours(0,0,0,0);
+        if(ld.getTime()===today.getTime()) dateStr='Bugün';
+        else if(ld.getTime()===today.getTime()+86400000) dateStr='Yarın';
+        var empty=Math.max(0,(l.playerCount||l.player_count||0)-(l.currentPlayers||l.current_players||1));
+        GAMES.push({
+          id:l.id, userId:l.userId||l.user_id,
+          title:l.description||l.sport+' '+l.location,
+          sport:l.sport, icon:icon,
+          host:l.userName||l.user_name||'Oyuncu',
+          loc:l.location, dist:'',
+          time:l.time||'--:--', date:dateStr,
+          price:l.notes||'Ücretsiz',
+          badge:l.status==='full'?'Dolu':'Açık',
+          desc:l.description||'',
+          players:Array(l.currentPlayers||l.current_players||1).fill('👤'),
+          empty:empty,
+          full:l.status==='full',
+          skillLevel:l.skillLevel||l.skill_level,
+          createdAt:l.createdAt||l.created_at
+        });
+      });
+      // Yeni ilanlar önce (zaten API DESC döndürüyor)
+      renderGamesList(filterSport&&filterSport!=='all'?filterSport:null);
+    }
+  }catch(e){ console.error('İlanlar yüklenemedi:',e); }
+}
+
+// =========== XP / İSTATİSTİK ===========
+var uStats={xp:0,level:1,games:0,created:0};
+function loadStats(){ try{var s=localStorage.getItem('probul_stats');if(s)uStats=Object.assign(uStats,JSON.parse(s));}catch(e){} }
+function saveStats(){ try{localStorage.setItem('probul_stats',JSON.stringify(uStats));}catch(e){} }
+function addXP(n){
+  uStats.xp+=n;
+  var nl=Math.floor(uStats.xp/1500)+1;
+  if(nl>uStats.level){ uStats.level=nl; setTimeout(function(){showBadgeToast('🆙','Seviye Atladın!','Seviye '+nl+'e ulaştın!','🎉 Seviye Atladı!');},500); }
+  saveStats(); refreshProfileStats();
+}
+function refreshProfileStats(){
+  var xpFill=document.getElementById('xp-bar-fill');
+  var xpLvl=document.querySelector('.xp-level-badge');
+  var xpPts=document.querySelector('.xp-points-txt');
+  var lt=uStats.level*1500, lb=(uStats.level-1)*1500;
+  var pct=Math.min(100,((uStats.xp-lb)/(lt-lb))*100);
+  if(xpFill) xpFill.style.width=pct+'%';
+  if(xpLvl) xpLvl.textContent=uStats.level;
+  if(xpPts) xpPts.textContent=uStats.xp.toLocaleString('tr-TR')+' / '+lt.toLocaleString('tr-TR')+' XP';
+  var g1=document.querySelector('.stat-item:nth-child(1) .stat-num'); if(g1) g1.textContent=uStats.games;
+  var g3=document.querySelector('.stat-item:nth-child(3) .stat-num'); if(g3) g3.textContent=uStats.created;
+}
+
+
+// =========== GOOGLE MAPS ===========
+function initHomeMap(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  var lat = 37.8716, lng = 32.4846; // Konya varsayılan
+  var locName = 'Konya, TR';
+  
+  if(userLocation && userLocation.lat){
+    lat = userLocation.lat;
+    lng = userLocation.lng;
+    locName = userLocation.name || locName;
+  } else if(u.location){
+    locName = u.location;
+  }
+  
+  var label = document.getElementById('map-location-label');
+  if(label) label.textContent = locName;
+  
+  var iframe = document.getElementById('home-map-iframe');
+  if(iframe){
+    var zoom = 14;
+    iframe.src = 'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d' + (40000/zoom) + '!2d'+lng+'!3d'+lat+'!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1str!2str!4v'+Date.now()+'!5m2!1str!2str';
+  }
+}
+
+function updateDetailMap(lat, lng, location, title){
+  var iframe = document.getElementById('detail-map-iframe');
+  var bubble = document.getElementById('detail-map-bubble');
+  if(bubble) bubble.textContent = title || location || 'Konum';
+  if(!iframe) return;
+  
+  if(lat && lng && parseFloat(lat) && parseFloat(lng)){
+    // Koordinat varsa direkt göster
+    var lt = parseFloat(lat), ln = parseFloat(lng);
+    iframe.src = 'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d2000!2d'+ln+'!3d'+lt+'!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1str!2str!4v'+Date.now()+'!5m2!1str!2str';
+  } else if(location){
+    // Adres varsa Google Maps linki (embed place search)
+    var encoded = encodeURIComponent((location||'') + ' Türkiye');
+    iframe.src = 'https://maps.google.com/maps?q='+encoded+'&output=embed&hl=tr&z=15';
+  }
+}
+
+// =========== INIT ===========
+document.addEventListener('DOMContentLoaded', function(){
+  initOtpBoxes();
+  document.getElementById('rm-submit-btn').addEventListener('click', submitRatings);
+
+  // Saat başlat
+  updateClock(); setInterval(updateClock,1000);
+
+  // Oyunları ve istatistikleri yükle
+  loadStats();
+
+  // Beni hatırla + otomatik giriş
+  var savedEmail=localStorage.getItem('probul_email');
+  var savedName=localStorage.getItem('probul_name');
+  var savedUser=JSON.parse(localStorage.getItem('currentUser')||'null');
+  if(savedEmail){
+    document.getElementById('login-email').value=savedEmail;
+    document.getElementById('rememberMe').checked=true;
+    switchTab('login');
+  }
+  if(savedName){
+    document.getElementById('profileName').textContent=savedName;
+  }
+  // Giriş yapılmışsa profil bilgisini göster ve direkt home'a git
+  if(savedUser && savedUser.id){
+    document.getElementById('profileName').textContent=savedUser.fullName||savedUser.name||savedName||'Kullanıcı';
+    // Direkt ana sayfaya yönlendir
+    goTo('home');
+    loadGamesFromAPI();
+    updateNavActive('home');
+    // Profil fotoğrafını ayarla
+    if(savedUser.profilePhoto){
+      userPhoto = savedUser.profilePhoto;
+      setUserPhoto();
+    }
+    // Gerçek haritayı başlat
+    setTimeout(initHomeMap, 500);
+  }
+});
+</script>
+
+<!-- Profil Düzenleme Overlay -->
+<div id="profile-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#1C1A18;border:1.5px solid rgba(255,255,255,0.1);border-radius:20px;padding:24px;width:340px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <span style="font-family:Syne,sans-serif;font-size:18px;font-weight:700;color:#F5F0E8;">Profili Düzenle</span>
+      <button onclick="closeProfileEdit()" style="background:none;border:none;color:#9A9286;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:600;color:#9A9286;letter-spacing:0.8px;text-transform:uppercase;display:block;margin-bottom:6px;">İSİM SOYAD</label>
+      <input id="pe-name" type="text" placeholder="İsim Soyad" style="width:100%;padding:12px;background:#242220;border:1.5px solid rgba(255,255,255,0.1);border-radius:10px;color:#F5F0E8;font-size:14px;outline:none;">
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:600;color:#9A9286;letter-spacing:0.8px;text-transform:uppercase;display:block;margin-bottom:6px;">TELEFON</label>
+      <input id="pe-phone" type="tel" placeholder="5551234567" style="width:100%;padding:12px;background:#242220;border:1.5px solid rgba(255,255,255,0.1);border-radius:10px;color:#F5F0E8;font-size:14px;outline:none;">
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:600;color:#9A9286;letter-spacing:0.8px;text-transform:uppercase;display:block;margin-bottom:6px;">KONUM</label>
+      <input id="pe-location" type="text" placeholder="Şehir" style="width:100%;padding:12px;background:#242220;border:1.5px solid rgba(255,255,255,0.1);border-radius:10px;color:#F5F0E8;font-size:14px;outline:none;">
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="font-size:11px;font-weight:600;color:#9A9286;letter-spacing:0.8px;text-transform:uppercase;display:block;margin-bottom:6px;">HAKKIMDA</label>
+      <textarea id="pe-bio" placeholder="Kendinizden bahsedin..." style="width:100%;padding:12px;background:#242220;border:1.5px solid rgba(255,255,255,0.1);border-radius:10px;color:#F5F0E8;font-size:14px;outline:none;min-height:80px;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="closeProfileEdit()" style="flex:1;padding:12px;background:#2e2b28;border:none;border-radius:10px;color:#F5F0E8;font-size:14px;cursor:pointer;">İptal</button>
+      <button id="pe-save-btn" onclick="saveProfileEdit()" style="flex:1;padding:12px;background:#FF5C1A;border:none;border-radius:10px;color:white;font-size:14px;font-weight:700;cursor:pointer;font-family:Syne,sans-serif;">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .catch(e => console.log('SW kayıt hatası:', e));
+  });
+}
+</script>
+</body>
+</html>

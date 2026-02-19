@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesajlar - Pro-Bul</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            cursor: pointer;
+        }
+        .header-right {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .notif-btn {
+            position: relative;
+            padding: 10px 20px;
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .notif-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #f44336;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 6px;
+            font-size: 11px;
+        }
+        .back-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .messaging-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            height: calc(100vh - 150px);
+        }
+        .conversations-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .conversations-header {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .conversation-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .conversation-item:hover { background: #f8f9fa; }
+        .conversation-item.active { background: #e3f2fd; }
+        .conversation-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #667eea;
+            position: relative;
+        }
+        .online-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            background: #4caf50;
+            border: 2px solid white;
+            border-radius: 50%;
+        }
+        .conversation-info { flex: 1; min-width: 0; }
+        .conversation-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .conversation-last-message {
+            font-size: 14px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .conversation-time {
+            font-size: 12px;
+            color: #999;
+        }
+        .unread-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f44336;
+            color: white;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .chat-panel {
+            background: white;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .chat-header {
+            padding: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .chat-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #667eea;
+        }
+        .chat-user-info { flex: 1; }
+        .chat-user-name {
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .chat-user-status {
+            font-size: 14px;
+            color: #4caf50;
+        }
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 70%;
+        }
+        .message.sent {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .message-content { flex: 1; }
+        .message-bubble {
+            background: #f0f0f0;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        .message.sent .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+        .message-input-container {
+            padding: 20px;
+            border-top: 2px solid #f0f0f0;
+            display: flex;
+            gap: 10px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .message-input:focus { border-color: #667eea; }
+        .send-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+        .send-btn:hover { transform: scale(1.1); }
+        .send-btn:active { transform: scale(0.95); }
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+        }
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        @media (max-width: 768px) {
+            .messaging-container { grid-template-columns: 1fr; }
+            .conversations-panel { display: none; }
+            .conversations-panel.active { display: block; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo" onclick="goHome()">⚽ Pro-Bul</div>
+            <div class="header-right">
+                <button class="notif-btn" onclick="alert('Bildirimler: Yakında!')">
+                    🔔 Bildirimler
+                    <span class="notif-badge" id="notifCount" style="display: none;">0</span>
+                </button>
+                <button class="back-btn" onclick="goHome()">← Ana Sayfa</button>
+            </div>
+        </div>
+
+        <div class="messaging-container">
+            <div class="conversations-panel">
+                <div class="conversations-header">Mesajlar</div>
+                <div id="conversationsList"></div>
+            </div>
+
+            <div class="chat-panel">
+                <div id="chatContent" class="empty-state">
+                    <div class="empty-state-icon">💬</div>
+                    <div>Bir konuşma seçin</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        let currentUser = null;
+        let selectedConversation = null;
+        let messagePolling = null;
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            await loadConversations();
+            await loadUnreadNotifications();
+            openPendingChat();
+        });
+
+        async function checkAuth() {
+            const userJson = localStorage.getItem('currentUser');
+            if (!userJson) {
+                alert('Mesajlaşmak için giriş yapmalısınız!');
+                window.location.href = '/';
+                return;
+            }
+            currentUser = JSON.parse(userJson);
+        }
+        
+        function openPendingChat() {
+            const pending = localStorage.getItem('openChatWith');
+            if (pending) {
+                localStorage.removeItem('openChatWith');
+                const target = JSON.parse(pending);
+                // Konuşmayı simüle et - kullanıcıyı direkt aç
+                selectConversationDirect(target.id, target.name, target.photo||'');
+            }
+        }
+        
+        async function selectConversationDirect(userId, userName, userPhoto) {
+            selectedConversation = { userId, userName, userPhoto, isOnline: false };
+            const chatPanel = document.querySelector('.chat-panel');
+            chatPanel.innerHTML = `
+                <div class="chat-header">
+                    <img class="chat-avatar" 
+                         src="${userPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(userName) + '&background=FF5C1A&color=fff'}" 
+                         alt="${userName}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=FF5C1A&color=fff'">
+                    <div class="chat-user-info">
+                        <div class="chat-user-name">${userName}</div>
+                        <div class="chat-user-status" id="chat-status">⚫ Çevrimdışı</div>
+                    </div>
+                </div>
+                <div class="messages-container" id="messagesContainer"></div>
+                <div class="message-input-container">
+                    <input type="text" class="message-input" id="messageInput" 
+                           placeholder="Mesajınızı yazın..." 
+                           onkeypress="if(event.key==='Enter') sendMessage()">
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+            `;
+            await loadMessages();
+            if (messagePolling) clearInterval(messagePolling);
+            messagePolling = setInterval(loadMessages, 3000);
+        }
+
+        async function loadUnreadNotifications() {
+            try {
+                const response = await fetch(`${API_URL}/api/notifications/unread/${currentUser.id}`);
+                const data = await response.json();
+                if (data.success && data.count > 0) {
+                    document.getElementById('notifCount').textContent = data.count;
+                    document.getElementById('notifCount').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Bildirim sayısı hatası:', error);
+            }
+        }
+
+        async function loadConversations() {
+            try {
+                const response = await fetch(`${API_URL}/api/conversations/${currentUser.id}`);
+                const data = await response.json();
+
+                const container = document.getElementById('conversationsList');
+                
+                if (data.conversations.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #999;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">📭</div>
+                            <div>Henüz mesajınız yok</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = data.conversations.map(conv => `
+                    <div class="conversation-item" onclick='selectConversation(${conv.other_user_id}, "${conv.other_user_name.replace(/'/g, "\\'")}","${conv.other_user_photo || ''}", ${conv.is_online})'>
+                        <div style="position: relative;">
+                            <img class="conversation-avatar" 
+                                 src="${conv.other_user_photo || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(conv.other_user_name)}" 
+                                 alt="${conv.other_user_name}">
+                            ${conv.is_online ? '<div class="online-indicator"></div>' : ''}
+                        </div>
+                        <div class="conversation-info">
+                            <div class="conversation-name">${conv.other_user_name}</div>
+                            <div class="conversation-last-message">${conv.last_message}</div>
+                        </div>
+                        <div class="conversation-time">${formatTime(conv.last_message_time)}</div>
+                        ${conv.unread_count > 0 ? `<div class="unread-badge">${conv.unread_count}</div>` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Konuşmalar yükleme hatası:', error);
+            }
+        }
+
+        async function selectConversation(userId, userName, userPhoto, isOnline) {
+            selectedConversation = { userId, userName, userPhoto, isOnline };
+            
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            const chatPanel = document.querySelector('.chat-panel');
+            chatPanel.innerHTML = `
+                <div class="chat-header">
+                    <img class="chat-avatar" 
+                         src="${userPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(userName)}" 
+                         alt="${userName}">
+                    <div class="chat-user-info">
+                        <div class="chat-user-name">${userName}</div>
+                        <div class="chat-user-status">${isOnline ? '🟢 Çevrimiçi' : '⚫ Çevrimdışı'}</div>
+                    </div>
+                </div>
+                <div class="messages-container" id="messagesContainer"></div>
+                <div class="message-input-container">
+                    <input type="text" class="message-input" id="messageInput" 
+                           placeholder="Mesajınızı yazın..." 
+                           onkeypress="if(event.key==='Enter') sendMessage()">
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+            `;
+
+            await loadMessages();
+            
+            if (messagePolling) clearInterval(messagePolling);
+            messagePolling = setInterval(loadMessages, 3000);
+        }
+
+        async function loadMessages() {
+            if (!selectedConversation) return;
+
+            try {
+                const response = await fetch(`${API_URL}/api/messages/${currentUser.id}/${selectedConversation.userId}`);
+                const data = await response.json();
+
+                const container = document.getElementById('messagesContainer');
+                
+                container.innerHTML = data.messages.map(msg => {
+                    const isSent = msg.sender_id == currentUser.id;
+                    return `
+                        <div class="message ${isSent ? 'sent' : 'received'}">
+                            <img class="message-avatar" 
+                                 src="${isSent ? (currentUser.profilePhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.name)) : (selectedConversation.userPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(selectedConversation.userName))}" 
+                                 alt="">
+                            <div class="message-content">
+                                <div class="message-bubble">${msg.message}</div>
+                                <div class="message-time">${formatTime(msg.created_at)}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.scrollTop = container.scrollHeight;
+                await loadConversations();
+            } catch (error) {
+                console.error('Mesajlar yükleme hatası:', error);
+            }
+        }
+
+        async function sendMessage() {
+            if (!selectedConversation) return;
+
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            try {
+                const response = await fetch(`${API_URL}/api/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        senderId: currentUser.id,
+                        receiverId: selectedConversation.userId,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    input.value = '';
+                    await loadMessages();
+                }
+            } catch (error) {
+                console.error('Mesaj gönderme hatası:', error);
+            }
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const seconds = Math.floor(diff / 1000);
+            
+            if (seconds < 60) return 'Az önce';
+            if (seconds < 3600) return Math.floor(seconds / 60) + ' dk';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + ' sa';
+            if (seconds < 604800) return Math.floor(seconds / 86400) + ' gün';
+            
+            return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+        }
+
+        function goHome() {
+            if (messagePolling) clearInterval(messagePolling);
+            window.location.href = '/';
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (messagePolling) clearInterval(messagePolling);
+        });
+    </script>
+</body>
+</html>
