@@ -944,13 +944,28 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         </div>
       </div>
       <div class="profile-section">
+        <div class="profile-section-title">İlanlarım</div>
+        <div id="my-listings-section">
+          <div style="color:var(--muted);font-size:13px;text-align:center;padding:12px;">Yükleniyor...</div>
+        </div>
+      </div>
+
+      <div class="profile-section">
         <div class="profile-section-title">Ayarlar</div>
         <div class="settings-list">
-          <div class="settings-item" onclick="showToast('🔔 Bildirim ayarları yakında!','success')"><div class="si-left"><span class="si-icon">🔔</span> Bildirimler</div><span class="si-arrow">›</span></div>
+          <div class="settings-item" onclick="showNotificationsPanel()"><div class="si-left"><span class="si-icon">🔔</span> Bildirimler <span id="notif-badge" style="display:none;background:var(--orange);color:white;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;">0</span></div><span class="si-arrow">›</span></div>
           <div class="settings-item" onclick="showToast('🔒 Gizlilik ayarları yakında!','success')"><div class="si-left"><span class="si-icon">🔒</span> Gizlilik</div><span class="si-arrow">›</span></div>
           <div class="settings-item" onclick="refreshLocation()"><div class="si-left"><span class="si-icon">📍</span> Konumu Güncelle</div><span class="si-arrow">›</span></div>
           <div class="settings-item" onclick="openProfileEdit()"><div class="si-left"><span class="si-icon">✏️</span> Profili Düzenle</div><span class="si-arrow">›</span></div>
           <div class="settings-item" onclick="showToast('❓ Yardım yakında!','success')"><div class="si-left"><span class="si-icon">❓</span> Yardım & Destek</div><span class="si-arrow">›</span></div>
+        </div>
+        <!-- Bildirimler Paneli -->
+        <div id="notif-panel" style="display:none;background:var(--card);border-radius:14px;padding:12px;margin-bottom:12px;border:1px solid var(--border);">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+            BİLDİRİMLER
+            <button onclick="markAllNotifsRead()" style="background:none;border:none;color:var(--orange);font-size:11px;cursor:pointer;font-weight:700;">Tümünü Oku</button>
+          </div>
+          <div id="notif-list"><div style="color:var(--muted);font-size:13px;text-align:center;padding:8px;">Yükleniyor...</div></div>
         </div>
         <button class="logout-btn" onclick="logout()">🚪 Çıkış Yap</button>
       </div>
@@ -1050,17 +1065,30 @@ function switchTab(tab){
 function triggerUpload(){document.getElementById('fileInput').click();}
 function previewPhoto(event){
   const file=event.target.files[0]; if(!file)return;
+  if(file.size > 5*1024*1024){ showToast && showToast('❌ Fotograf 5MB dan buyuk olamaz','error'); return; }
   const reader=new FileReader();
   reader.onload=function(e){
-    userPhoto=e.target.result; photoSelected=true;
-    const img=document.getElementById('avatarImg');
-    img.src=e.target.result; img.style.display='block';
-    document.getElementById('avatarEmoji').style.display='none';
-    document.getElementById('photoStrong').textContent='Fotoğraf Seçildi ✓';
-    document.getElementById('photoSpan').textContent=file.name;
-    document.getElementById('photoBtn').textContent='Değiştir';
-    document.getElementById('photo-upload-area').classList.remove('error');
-    setErr('reg-photo',false);
+    // Canvas ile resize - max 256x256, JPEG quality 0.75 (~50KB)
+    var image = new Image();
+    image.onload = function(){
+      var canvas = document.createElement('canvas');
+      var MAX = 256;
+      var ratio = Math.min(MAX/image.width, MAX/image.height, 1);
+      canvas.width = Math.round(image.width * ratio);
+      canvas.height = Math.round(image.height * ratio);
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      userPhoto = canvas.toDataURL('image/jpeg', 0.75);
+      photoSelected = true;
+      const imgEl=document.getElementById('avatarImg');
+      imgEl.src=userPhoto; imgEl.style.display='block';
+      document.getElementById('avatarEmoji').style.display='none';
+      document.getElementById('photoStrong').textContent='Fotoğraf Seçildi ✓';
+      document.getElementById('photoSpan').textContent=file.name;
+      document.getElementById('photoBtn').textContent='Değiştir';
+      document.getElementById('photo-upload-area').classList.remove('error');
+      setErr('reg-photo',false);
+    };
+    image.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -1383,7 +1411,7 @@ function navTo(name){
     updateNavActive('home');
   }
   if(name==='profile'){
-    setTimeout(function(){ loadFriendsSection(); loadRealProfileStats(); }, 100);
+    setTimeout(function(){ loadFriendsSection(); loadRealProfileStats(); updateNotifBadge(); }, 100);
     updateNavActive('profile');
   }
   if(name==='search') updateNavActive('search');
@@ -1463,17 +1491,40 @@ function openDetail(idx){
   }
   // Google Maps haritasını güncelle
   updateDetailMap(g.lat, g.lng, g.loc, g.icon+' '+g.title);
+  // Katılımcıları yükle
+  _currentDetailGameId = g.id;
+  loadDetailParticipants(g.id);
   screenHistory.push(currentScreen);
   goTo('detail');
 }
+var _currentDetailGameId = null;
 function detailJoin(){
-  const btn=document.getElementById('detail-join-btn');
+  var btn=document.getElementById('detail-join-btn');
+  var currentUser=JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!currentUser.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  if(!_currentDetailGameId){ showToast('❌ İlan bulunamadı','error'); return; }
   btn.innerHTML='<span>⏳</span> Katılıyor...'; btn.disabled=true;
-  setTimeout(()=>{
-    btn.innerHTML='<span>✅</span> Katıldın!';
-    btn.style.background='var(--green)'; btn.style.boxShadow='0 12px 32px rgba(42,157,92,0.35)';
-    showToast('🎉 Oyuna başarıyla katıldın!','success');
-  },1200);
+  fetch(API+'/api/listings/'+_currentDetailGameId+'/join',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({userId:currentUser.id})
+  }).then(r=>r.json()).then(function(data){
+    if(data.success){
+      btn.innerHTML='<span>✅</span> Katıldın!';
+      btn.style.background='var(--green)';
+      btn.style.boxShadow='0 12px 32px rgba(42,157,92,0.35)';
+      showToast('🎉 Oyuna katıldın! +20 XP','success');
+      uStats.games++; addXP(20);
+      loadGamesFromAPI();
+      // Rating modalı 5sn sonra aç
+      setTimeout(function(){ openRatingForListing(_currentDetailGameId); }, 5000);
+    } else {
+      btn.innerHTML='<span>🎯</span> Oyuna Katıl'; btn.disabled=false;
+      showToast('❌ '+(data.error||'Katılınamadı'),'error');
+    }
+  }).catch(function(){
+    btn.innerHTML='<span>🎯</span> Oyuna Katıl'; btn.disabled=false;
+    showToast('❌ Bağlantı hatası','error');
+  });
 }
 
 
@@ -1754,7 +1805,40 @@ function searchBySport(name){
   document.getElementById('search-input').value=name;
   handleSearch(name);
 }
-function toggleFchip(el){el.classList.toggle('active');}
+function toggleFchip(el){
+  el.classList.toggle('active');
+  applySearchFilters();
+}
+function applySearchFilters(){
+  var chips = document.querySelectorAll('.fchip');
+  var activeFilters = [];
+  chips.forEach(function(c){ if(c.classList.contains('active')) activeFilters.push(c.textContent.trim()); });
+  var filtered = GAMES.filter(function(g){
+    if(activeFilters.includes('Açık') && g.full) return false;
+    if(activeFilters.includes('Dolu') && !g.full) return false;
+    if(activeFilters.includes('Ücretsiz') && g.price !== 'Ücretsiz') return false;
+    if(activeFilters.includes('Bu Gün') && g.date !== 'Bugün') return false;
+    return true;
+  });
+  var list = document.getElementById('search-results-list');
+  if(!list) return;
+  var def = document.getElementById('search-default');
+  var res = document.getElementById('search-results');
+  if(activeFilters.length < 3){ // bazı filtreler seçili
+    if(def) def.style.display='none';
+    if(res) res.style.display='';
+    document.getElementById('search-results-title').textContent = filtered.length+' oyun bulundu';
+    list.innerHTML = '';
+    filtered.forEach(function(g){
+      var idx = GAMES.indexOf(g);
+      list.innerHTML += '<div class="result-card" onclick="openDetail('+idx+')">'
+        +'<div class="rc-icon sport-icon '+g.sport+'">'+g.icon+'</div>'
+        +'<div class="rc-info"><strong>'+g.title+'</strong><span>📍 '+(g.loc||'')+' · 🕐 '+g.date+' '+g.time+'</span></div>'
+        +'<div class="rc-badge '+(g.full?'dolu':'acik')+' badge">'+(g.full?'Dolu':'Açık')+'</div>'
+        +'</div>';
+    });
+  }
+}
 
 // =========== ŞİFRE SIFIRLAMA ===========
 function showForgotScreen(){
@@ -2071,47 +2155,102 @@ function setRating(playerIdx,stars){
   });
 }
 
-function submitRatings(){
+var _ratingParticipants = []; // {id, name, photo, role}
+var _ratingListingId = null;
+
+async function openRatingForListing(listingId){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/listings/'+listingId+'/participants-for-rating?userId='+u.id);
+    var data = await res.json();
+    if(!data.success || !data.participants || !data.participants.length){
+      return; // katılımcı yok, modal açma
+    }
+    _ratingParticipants = data.participants;
+    _ratingListingId = listingId;
+    openRatingModal(data.participants);
+  } catch(e){ console.error('Rating participants error:', e); }
+}
+
+function openRatingModal(participants){
+  ratingScores = {};
+  var container = document.getElementById('rm-players');
+  container.innerHTML = '';
+  document.getElementById('rm-subtitle').textContent = participants.length+' oyuncuyu değerlendir';
+
+  participants.forEach(function(p, idx){
+    ratingScores[p.id] = 0;
+    var tags = ['👍 Dakik','⚡ Enerjik','🤝 Takım Oyuncusu','😄 Eğlenceli','💪 Yetenekli','🎯 Odaklı'];
+    var avatar = p.profile_photo
+      ? '<img src="'+p.profile_photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">'
+      : '👤';
+    var div = document.createElement('div');
+    div.className = 'rm-player';
+    div.innerHTML =
+      '<div class="rm-player-top">'
+        +'<div class="rm-player-avatar">'+avatar+'</div>'
+        +'<div class="rm-player-info"><strong>'+p.name+'</strong><span>'+(p.role==='host'?'👑 İlan Sahibi':'👤 Katılımcı')+'</span></div>'
+      +'</div>'
+      +'<div class="rm-star-row" id="rms-'+p.id+'">'
+        +[1,2,3,4,5].map(function(s){ return '<span class="rm-star" data-uid="'+p.id+'" data-star="'+s+'" style="opacity:0.3;cursor:pointer;">⭐</span>'; }).join('')
+      +'</div>'
+      +'<div class="rm-tags">'
+        +tags.map(function(t){ return '<div class="rm-tag" onclick="this.classList.toggle(&quot;active&quot;)">'+t+'</div>'; }).join('')
+      +'</div>';
+    container.appendChild(div);
+  });
+
+  container.querySelectorAll('.rm-star').forEach(function(star){
+    star.addEventListener('click', function(){
+      var uid = this.dataset.uid;
+      var sc = parseInt(this.dataset.star);
+      ratingScores[uid] = sc;
+      document.querySelectorAll('#rms-'+uid+' .rm-star').forEach(function(s,i){
+        s.style.opacity = i < sc ? '1' : '0.3';
+      });
+    });
+  });
+
+  document.getElementById('rm-submit-btn').onclick = submitRatings;
+  document.getElementById('rating-overlay').style.display='flex';
+}
+
+async function submitRatings(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
   document.getElementById('rating-overlay').style.display='none';
-  showToast('⭐ Değerlendirmeler kaydedildi! +50 XP','success');
-  // Değerlendirici rozeti — sadece ilk defa
-  if(!window._hasRatingBadge){
-    window._hasRatingBadge = true;
-    setTimeout(function(){ showBadgeToast('🤝','Değerlendirici','İlk oyuncu değerlendirmeni yaptın!','🎉 Yeni Rozet!'); }, 800);
+
+  var promises = [];
+  _ratingParticipants.forEach(function(p){
+    var score = ratingScores[p.id];
+    if(score > 0){
+      var tags = [];
+      document.querySelectorAll('#rms-'+p.id).forEach(function(el){
+        el.closest('.rm-player')?.querySelectorAll('.rm-tag.active').forEach(function(t){ tags.push(t.textContent); });
+      });
+      promises.push(fetch(API+'/api/ratings', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ raterId: u.id, ratedId: p.id, listingId: _ratingListingId, score, tags })
+      }));
+    }
+  });
+
+  if(promises.length){
+    await Promise.all(promises).catch(function(){});
+    showToast('⭐ Değerlendirmeler kaydedildi! +50 XP','success');
+    addXP(50);
+    if(!window._hasRatingBadge){
+      window._hasRatingBadge = true;
+      setTimeout(function(){ showBadgeToast('🤝','Değerlendirici','İlk oyuncu değerlendirmeni yaptın!','🎉 Yeni Rozet!'); }, 800);
+    }
+  } else {
+    showToast('⚠️ En az bir oyuncuyu puanla','error');
+    document.getElementById('rating-overlay').style.display='flex';
   }
 }
 
-// =========== OVERRIDE detailJoin ===========
-const _origDetailJoin = detailJoin;
-detailJoin = function(){
-  var gameIdx = GAMES.findIndex(function(g){ return g.title === document.getElementById('detail-title').textContent; });
-  var game = gameIdx>=0 ? GAMES[gameIdx] : null;
-  var btn=document.getElementById('detail-join-btn');
-  var currentUser=JSON.parse(localStorage.getItem('currentUser')||'{}');
-  if(!currentUser.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
-  if(!game){ showToast('❌ İlan bulunamadı','error'); return; }
-  btn.innerHTML='<span>⏳</span> Katılıyor...'; btn.disabled=true;
-  fetch(API+'/api/listings/'+game.id+'/join',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({userId:currentUser.id})
-  }).then(r=>r.json()).then(function(data){
-    if(data.success){
-      btn.innerHTML='<span>✅</span> Katıldın!';
-      btn.style.background='var(--green)';
-      btn.style.boxShadow='0 12px 32px rgba(42,157,92,0.35)';
-      showToast('🎉 Oyuna katıldın! +20 XP','success');
-      uStats.games++; addXP(20);
-      loadGamesFromAPI();
-      setTimeout(function(){ showRatingNotification(gameIdx); }, 8000);
-    } else {
-      btn.innerHTML='<span>🎯</span> Oyuna Katıl'; btn.disabled=false;
-      showToast('❌ '+(data.error||'Katılınamadı'),'error');
-    }
-  }).catch(function(){
-    btn.innerHTML='<span>🎯</span> Oyuna Katıl'; btn.disabled=false;
-    showToast('❌ Bağlantı hatası','error');
-  });
-};
+// detailJoin gerçek implementasyon yukarıda
 
 function showRatingNotification(gameIdx){
   var existing = document.querySelector('.badge-toast');
@@ -2159,6 +2298,14 @@ goToHome = function(){
   fetch(API+'/api/stats').then(r=>r.json()).then(function(d){
     var onEl=document.getElementById('online-count');
     if(onEl) onEl.textContent=(d.onlineUsers||0)+' çevrimiçi';
+    // Her 60 saniyede bir güncelle
+    clearInterval(window._onlineCountInterval);
+    window._onlineCountInterval = setInterval(function(){
+      fetch(API+'/api/stats').then(r=>r.json()).then(function(dd){
+        var el=document.getElementById('online-count');
+        if(el) el.textContent=(dd.onlineUsers||0)+' çevrimiçi';
+      }).catch(function(){});
+    }, 60000);
   }).catch(function(){});
   if(window._justRegistered){
     window._justRegistered = false;
@@ -2217,19 +2364,70 @@ async function loadRealProfileStats(){
     var res = await fetch(API+'/api/users/'+u.id+'/stats');
     var data = await res.json();
     if(data.success){
-      var s = data.stats;
+      var st = data.stats;
       var items = document.querySelectorAll('.stat-item .stat-num');
-      if(items[0]) items[0].textContent = s.gamesJoined;
-      // puan fixed for now
-      if(items[2]) items[2].textContent = s.friends;
-      uStats.games = s.gamesJoined;
-      uStats.created = s.gamesCreated;
+      if(items[0]) items[0].textContent = (st.gamesJoined||0) + (st.gamesCreated||0);
+      if(items[1]) items[1].textContent = st.ratingAvg > 0 ? parseFloat(st.ratingAvg).toFixed(1) : '—';
+      if(items[2]) items[2].textContent = st.friends||0;
+      uStats.games = st.gamesJoined||0;
+      uStats.created = st.gamesCreated||0;
       saveStats();
     }
   } catch(e){}
   // Konum güncelle
   var locEl = document.querySelector('.profile-loc');
   if(locEl && u.location) locEl.textContent = '📍 '+u.location;
+  // Aktiviteleri ve ilanları da yükle
+  loadActivityList();
+  loadMyListings();
+}
+
+async function loadActivityList(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  var actList = document.querySelector('.activity-list');
+  if(!actList) return;
+  actList.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yükleniyor...</div>';
+  try {
+    // Katıldığım + oluşturduğum ilanlar
+    var [joinedRes, createdRes] = await Promise.all([
+      fetch(API+'/api/users/'+u.id+'/joined-listings'),
+      fetch(API+'/api/users/'+u.id+'/my-listings')
+    ]);
+    var joined = await joinedRes.json();
+    var created = await createdRes.json();
+    
+    var sportIcons = {futbol:'⚽',okey:'🀄',basket:'🏀',basketbol:'🏀',tenis:'🎾',voleybol:'🏐'};
+    var items = [];
+    
+    (joined.listings||[]).forEach(function(l){
+      items.push({ sport:l.sport, title:l.description||l.sport+' Oyunu', location:l.location,
+        date:l.joined_at, badge:'Katıldı', badgeColor:'rgba(42,157,92,0.12)', badgeText:'#4caf8e' });
+    });
+    (created.listings||[]).forEach(function(l){
+      items.push({ sport:l.sport, title:l.description||l.sport+' Oyunu', location:l.location,
+        date:l.created_at, badge:'Oluşturdu', badgeColor:'rgba(255,92,26,0.12)', badgeText:'var(--orange)' });
+    });
+    items.sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
+    items = items.slice(0, 8);
+
+    if(!items.length){
+      actList.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Henüz aktivite yok</div>';
+      return;
+    }
+    actList.innerHTML = items.map(function(it){
+      var icon = sportIcons[it.sport]||'🏅';
+      var sportClass = it.sport||'futbol';
+      var dateStr = it.date ? new Date(it.date).toLocaleDateString('tr-TR',{day:'numeric',month:'short'}) : '';
+      return '<div class="activity-item">'
+        +'<div class="ai-icon '+sportClass+'">'+icon+'</div>'
+        +'<div class="ai-info"><strong>'+it.title+'</strong><span>'+dateStr+(it.location?' · '+it.location:'')+'</span></div>'
+        +'<div class="ai-badge" style="background:'+it.badgeColor+';color:'+it.badgeText+'">'+it.badge+'</div>'
+        +'</div>';
+    }).join('');
+  } catch(e){
+    actList.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yüklenemedi</div>';
+  }
 }
 
 // =========== KONUMU YENİLE ===========
@@ -2261,6 +2459,130 @@ function refreshLocation(){
         showToast('✅ Konum güncellendi: '+locName,'success');
       });
   }, function(){ showToast('❌ Konum alınamadı','error'); });
+}
+
+
+
+// =========== KENDİ İLANLARI ===========
+async function loadMyListings(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  var sec = document.getElementById('my-listings-section');
+  if(!sec) return;
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/my-listings');
+    var data = await res.json();
+    if(!data.listings || !data.listings.length){
+      sec.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:12px;">Henüz ilan oluşturmadın</div>';
+      return;
+    }
+    var icons = {futbol:'⚽',okey:'🀄',basket:'🏀',basketbol:'🏀',tenis:'🎾'};
+    sec.innerHTML = data.listings.map(function(l){
+      var ic = icons[l.sport]||'🏅';
+      var dateStr = l.date ? new Date(l.date).toLocaleDateString('tr-TR',{day:'numeric',month:'short'}) : '';
+      var statusBg = l.status==='full'?'rgba(224,80,80,0.12)':'rgba(42,157,92,0.12)';
+      var statusColor = l.status==='full'?'#e05050':'#4caf8e';
+      var statusTxt = l.status==='full'?'Dolu':'Açık';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">'
+        +'<div style="width:40px;height:40px;border-radius:12px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+ic+'</div>'
+        +'<div style="flex:1;min-width:0;">'
+          +'<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+( l.description||l.sport+' Oyunu' )+'</div>'
+          +'<div style="font-size:11px;color:var(--muted);">'+dateStr+' · '+l.location+'</div>'
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">'
+          +'<div style="font-size:11px;padding:2px 8px;border-radius:8px;background:'+statusBg+';color:'+statusColor+';font-weight:700;">'+statusTxt+'</div>'
+          +'<button onclick="deleteMyListing('+l.id+',this)" style="font-size:10px;padding:2px 8px;background:rgba(224,80,80,0.1);border:1px solid rgba(224,80,80,0.2);border-radius:6px;color:#e05050;cursor:pointer;">🗑 Sil</button>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  } catch(e){
+    sec.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:12px;">Yüklenemedi</div>';
+  }
+}
+
+async function deleteMyListing(listingId, btn){
+  if(!confirm('Bu ilanı silmek istediğinden emin misin?')) return;
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  if(btn){ btn.disabled=true; btn.textContent='Siliniyor...'; }
+  try {
+    var res = await fetch(API+'/api/listings/'+listingId, {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: u.id })
+    });
+    var data = await res.json();
+    if(data.success){
+      showToast('✅ İlan silindi','success');
+      loadMyListings();
+      loadGamesFromAPI();
+    } else {
+      showToast('❌ '+(data.error||'Silinemedi'),'error');
+      if(btn){ btn.disabled=false; btn.textContent='🗑 Sil'; }
+    }
+  } catch(e){ showToast('❌ Hata','error'); if(btn){ btn.disabled=false; btn.textContent='🗑 Sil'; } }
+}
+
+// =========== BİLDİRİMLER ===========
+async function showNotificationsPanel(){
+  var panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  var isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : 'block';
+  if(!isVisible) await loadNotifications();
+}
+
+async function loadNotifications(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  var list = document.getElementById('notif-list');
+  if(!list) return;
+  try {
+    var res = await fetch(API+'/api/notifications/'+u.id);
+    var data = await res.json();
+    if(!data.notifications || !data.notifications.length){
+      list.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:8px;">Bildirim yok</div>';
+      return;
+    }
+    list.innerHTML = data.notifications.slice(0,15).map(function(n){
+      var unread = !n.is_read ? 'background:rgba(255,92,26,0.06);border-left:3px solid var(--orange);' : '';
+      var time = n.created_at ? new Date(n.created_at).toLocaleDateString('tr-TR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div style="padding:10px 8px;border-bottom:1px solid var(--border);'+unread+'" onclick="markNotifRead('+n.id+',this)">'
+        +'<div style="font-size:13px;font-weight:600;color:var(--text)">'+n.title+'</div>'
+        +'<div style="font-size:12px;color:var(--muted);margin-top:3px;">'+n.message+'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:4px;">'+time+'</div>'
+        +'</div>';
+    }).join('');
+  } catch(e){ list.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:8px;">Yüklenemedi</div>'; }
+}
+
+async function markNotifRead(id, el){
+  if(el) { el.style.borderLeft='none'; el.style.background=''; }
+  await fetch(API+'/api/notifications/'+id+'/read', {method:'PUT'}).catch(function(){});
+  updateNotifBadge();
+}
+
+async function markAllNotifsRead(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  var all = document.querySelectorAll('#notif-list > div');
+  all.forEach(function(el){ el.style.borderLeft='none'; el.style.background=''; });
+  await loadNotifications();
+  var badge = document.getElementById('notif-badge');
+  if(badge) badge.style.display='none';
+}
+
+async function updateNotifBadge(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/notifications/unread/'+u.id);
+    var data = await res.json();
+    var badge = document.getElementById('notif-badge');
+    if(badge){
+      if(data.count > 0){ badge.textContent=data.count; badge.style.display='inline'; }
+      else badge.style.display='none';
+    }
+  } catch(e){}
 }
 
 // =========== ARKADAŞ SİSTEMİ ===========
@@ -2516,8 +2838,27 @@ async function loadGamesFromAPI(filterSport){
       });
       // Yeni ilanlar önce (zaten API DESC döndürüyor)
       renderGamesList(filterSport&&filterSport!=='all'?filterSport:null);
+      // Sport sayılarını güncelle
+      updateSportCounts();
     }
   }catch(e){ console.error('İlanlar yüklenemedi:',e); }
+}
+
+async function updateSportCounts(){
+  try {
+    var res = await fetch(API+'/api/listings/sport-counts');
+    var data = await res.json();
+    if(!data.success) return;
+    var c = data.counts;
+    var cards = document.querySelectorAll('.sport-card');
+    var sportNames = ['futbol','okey','basket','tenis'];
+    sportNames.forEach(function(sp, i){
+      var card = cards[i];
+      if(!card) return;
+      var span = card.querySelector('.sc-info span');
+      if(span) span.textContent = (c[sp]||0)+' aktif oyun';
+    });
+  } catch(e){}
 }
 
 // =========== XP / İSTATİSTİK ===========
