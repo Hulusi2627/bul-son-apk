@@ -53,9 +53,9 @@ app.use(cors({
 // Genel istekler için küçük limit
 app.use((req, res, next) => {
   // Fotoğraf yükleme route'larına 2MB, diğerlerine 100KB
-  const photoRoutes = ['/api/register', '/api/profile/'];
+  const photoRoutes = ['/api/register', '/api/profile/', '/api/login'];
   const isPhotoRoute = photoRoutes.some(r => req.path.startsWith(r));
-  express.json({ limit: isPhotoRoute ? '2mb' : '100kb' })(req, res, next);
+  express.json({ limit: isPhotoRoute ? '500kb' : '50kb' })(req, res, next);
 });
 app.use(limiter);
 app.use(express.static('public'));
@@ -166,6 +166,20 @@ async function initDatabase() {
       )
     `);
 
+    // Kullanıcı değerlendirmeleri
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ratings (
+        id SERIAL PRIMARY KEY,
+        rater_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        rated_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        listing_id INTEGER REFERENCES listings(id) ON DELETE SET NULL,
+        score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5),
+        tags TEXT[],
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(rater_id, rated_id, listing_id)
+      )
+    `);
+
     // Admin logs tablosu
     await pool.query(`
       CREATE TABLE IF NOT EXISTS admin_logs (
@@ -178,6 +192,10 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // rating_avg kolonu ekle (varsa zaten atlar)
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_avg DECIMAL(3,2) DEFAULT 0`).catch(()=>{});
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_count INTEGER DEFAULT 0`).catch(()=>{});
 
     // İlk admin kullanıcısını oluştur (varsa güncelle)
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@probul.com';
@@ -396,12 +414,12 @@ app.post('/api/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Base64 fotoğrafı DB'ye yazma - sadece URL kabul et (bellek tasarrufu)
-    let photoToSave = null;
-    if (profilePhoto && !profilePhoto.startsWith('data:')) {
-      photoToSave = profilePhoto; // URL ise kaydet
+    // Fotoğraf: canvas ile resize edilmiş base64 (~50KB) veya URL kabul et
+    let photoToSave = profilePhoto || null;
+    // Çok büyük base64'leri reddet (300KB'dan büyük)
+    if (photoToSave && photoToSave.startsWith('data:') && photoToSave.length > 400000) {
+      photoToSave = null; // çok büyük, reddet
     }
-    // Base64 ise sil - çok büyük, OOM yapıyor
 
     const result = await pool.query(
       `INSERT INTO users (name, email, phone, password, profile_photo) 
@@ -556,7 +574,8 @@ app.put('/api/profile/:userId', async (req, res) => {
     const { userId } = req.params;
     const { name, phone, profilePhoto, bio, location, favoriteSports } = req.body;
     // Base64 fotoğrafı DB'ye yazma
-    const safePhoto = profilePhoto && !profilePhoto.startsWith('data:') ? profilePhoto : undefined;
+    // Fotoğraf: canvas resize edilmiş base64 (~50KB) veya URL
+    const safePhoto = profilePhoto && (profilePhoto.length < 400000) ? profilePhoto : undefined;
 
     const result = await pool.query(
       `UPDATE users 
@@ -867,6 +886,29 @@ app.post('/api/listings/:id/join', async (req, res) => {
 // USERS ENDPOINTs
 // ============================================
 
+// ============================================================
+// KULLANICI ARAMA
+// ============================================================
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const { q, userId } = req.query;
+    if (!q || q.trim().length < 2) return res.json({ success: true, users: [] });
+    const result = await pool.query(
+      `SELECT id, name, profile_photo, location, is_online
+       FROM users 
+       WHERE (LOWER(name) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1))
+         AND id != $2 AND is_admin = false
+       ORDER BY is_online DESC, name ASC
+       LIMIT 10`,
+      ['%' + q.trim() + '%', userId || 0]
+    );
+    res.json({ success: true, users: result.rows });
+  } catch (error) {
+    console.error('[user-search] Hata:', error);
+    res.status(500).json({ error: 'Arama hatası' });
+  }
+});
+
 // Tüm kullanıcıları listele (arama için)
 app.get('/api/users', async (req, res) => {
   try {
@@ -944,12 +986,22 @@ app.get('/api/users/:userId/stats', async (req, res) => {
       [userId]
     );
 
+    const ratingData = await pool.query(
+      'SELECT rating_avg, rating_count FROM users WHERE id=$1', [userId]
+    );
+    const friendCount = await pool.query(
+      `SELECT COUNT(*) FROM friendships WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+      [userId]
+    );
+
     res.json({
       success: true,
       stats: {
         gamesJoined: parseInt(gamesJoined.rows[0].count),
         gamesCreated: parseInt(gamesCreated.rows[0].count),
-        friends: parseInt(friends.rows[0].count)
+        friends: parseInt(friendCount.rows[0].count),
+        ratingAvg: parseFloat(ratingData.rows[0]?.rating_avg || 0).toFixed(1),
+        ratingCount: parseInt(ratingData.rows[0]?.rating_count || 0)
       }
     });
   } catch (error) {
@@ -1126,6 +1178,18 @@ app.get('/api/messages/unread/:userId', async (req, res) => {
     console.error('[unread-count] Hata:', error);
     res.status(500).json({ error: 'Sayı getirilemedi' });
   }
+});
+
+// Mesajları okundu olarak işaretle
+app.put('/api/messages/:userId/:otherUserId/read', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.params;
+    await pool.query(
+      'UPDATE messages SET is_read=true WHERE sender_id=$1 AND receiver_id=$2 AND is_read=false',
+      [otherUserId, userId]
+    );
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: 'Güncelleme hatası' }); }
 });
 
 // ============================================
@@ -1501,29 +1565,6 @@ setInterval(async () => {
 }, 60 * 1000);
 
 // ============================================================
-// KULLANICI ARAMA
-// ============================================================
-app.get('/api/users/search', async (req, res) => {
-  try {
-    const { q, userId } = req.query;
-    if (!q || q.trim().length < 2) return res.json({ success: true, users: [] });
-    const result = await pool.query(
-      `SELECT id, name, profile_photo, location, is_online
-       FROM users 
-       WHERE (LOWER(name) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1))
-         AND id != $2 AND is_admin = false
-       ORDER BY is_online DESC, name ASC
-       LIMIT 10`,
-      ['%' + q.trim() + '%', userId || 0]
-    );
-    res.json({ success: true, users: result.rows });
-  } catch (error) {
-    console.error('[user-search] Hata:', error);
-    res.status(500).json({ error: 'Arama hatası' });
-  }
-});
-
-// ============================================================
 // ARKADAŞLIK SİSTEMİ
 // ============================================================
 
@@ -1638,6 +1679,126 @@ app.delete('/api/friendships/:friendshipId', async (req, res) => {
     console.error('[friendship-delete] Hata:', error);
     res.status(500).json({ error: 'Silme hatası' });
   }
+});
+
+
+// ============================================================
+// DEĞERLENDİRME (RATING) SİSTEMİ
+// ============================================================
+
+// Değerlendirme gönder
+app.post('/api/ratings', async (req, res) => {
+  try {
+    const { raterId, ratedId, listingId, score, tags } = req.body;
+    if (!raterId || !ratedId || !score) return res.status(400).json({ error: 'Eksik alan' });
+    if (raterId == ratedId) return res.status(400).json({ error: 'Kendinizi değerlendiremezsiniz' });
+
+    // Upsert: aynı rater+rated+listing için güncelle
+    await pool.query(
+      `INSERT INTO ratings (rater_id, rated_id, listing_id, score, tags)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (rater_id, rated_id, listing_id) DO UPDATE SET score=$4, tags=$5`,
+      [raterId, ratedId, listingId || null, score, tags || []]
+    );
+
+    // Kullanıcının ortalama puanını güncelle
+    const avg = await pool.query(
+      'SELECT AVG(score) as avg, COUNT(*) as cnt FROM ratings WHERE rated_id=$1',
+      [ratedId]
+    );
+    await pool.query(
+      'UPDATE users SET rating_avg=$1, rating_count=$2 WHERE id=$3',
+      [parseFloat(avg.rows[0].avg).toFixed(2), parseInt(avg.rows[0].cnt), ratedId]
+    );
+
+    res.json({ success: true, newAvg: parseFloat(avg.rows[0].avg).toFixed(2) });
+  } catch(e) {
+    console.error('[rating] Hata:', e);
+    res.status(500).json({ error: 'Değerlendirme kaydedilemedi' });
+  }
+});
+
+// Kullanıcının puanını getir
+app.get('/api/users/:userId/rating', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      'SELECT rating_avg, rating_count FROM users WHERE id=$1', [userId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    res.json({ success: true, avg: result.rows[0].rating_avg || 0, count: result.rows[0].rating_count || 0 });
+  } catch(e) { res.status(500).json({ error: 'Puan getirilemedi' }); }
+});
+
+// Kullanıcının katıldığı ilanları getir (aktivite)
+app.get('/api/users/:userId/joined-listings', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      `SELECT l.id, l.sport, l.location, l.date, l.time, l.status, l.description,
+              lp.joined_at,
+              u.name as host_name
+       FROM listing_participants lp
+       JOIN listings l ON lp.listing_id = l.id
+       JOIN users u ON l.user_id = u.id
+       WHERE lp.user_id = $1
+       ORDER BY lp.joined_at DESC
+       LIMIT 20`,
+      [userId]
+    );
+    res.json({ success: true, listings: result.rows });
+  } catch(e) { res.status(500).json({ error: 'İlanlar getirilemedi' }); }
+});
+
+// Kendi oluşturduğu ilanlar
+app.get('/api/users/:userId/my-listings', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      `SELECT l.*, 
+              (SELECT COUNT(*) FROM listing_participants WHERE listing_id=l.id) as participant_count
+       FROM listings l WHERE l.user_id=$1 ORDER BY l.created_at DESC LIMIT 20`,
+      [userId]
+    );
+    res.json({ success: true, listings: result.rows });
+  } catch(e) { res.status(500).json({ error: 'İlanlar getirilemedi' }); }
+});
+
+// İlan katılımcılarını getir (rating için)
+app.get('/api/listings/:id/participants-for-rating', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.query;
+    // İlan sahibi + katılımcılar (kendim hariç)
+    const listing = await pool.query('SELECT user_id FROM listings WHERE id=$1', [id]);
+    if (!listing.rows.length) return res.status(404).json({ error: 'İlan bulunamadı' });
+    
+    const result = await pool.query(
+      `SELECT DISTINCT u.id, u.name, u.profile_photo,
+              CASE WHEN u.id=$2 THEN 'host' ELSE 'participant' END as role
+       FROM (
+         SELECT user_id FROM listing_participants WHERE listing_id=$1
+         UNION SELECT $2::integer
+       ) p
+       JOIN users u ON p.user_id=u.id
+       WHERE u.id != $3
+       ORDER BY role DESC`,
+      [id, listing.rows[0].user_id, userId || 0]
+    );
+    res.json({ success: true, participants: result.rows });
+  } catch(e) { res.status(500).json({ error: 'Katılımcılar getirilemedi' }); }
+});
+
+// Spor dalına göre ilan sayısı
+app.get('/api/listings/sport-counts', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT sport, COUNT(*) as count FROM listings WHERE status='active' GROUP BY sport`
+    );
+    const counts = {};
+    result.rows.forEach(r => { counts[r.sport] = parseInt(r.count); });
+    res.json({ success: true, counts });
+  } catch(e) { res.status(500).json({ error: 'Sayılar getirilemedi' }); }
 });
 
 // ============================================
