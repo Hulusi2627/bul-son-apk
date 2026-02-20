@@ -655,7 +655,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="display:flex;align-items:center;gap:5px;background:var(--card);padding:6px 10px;border-radius:10px;border:1px solid var(--border);">
           <span style="width:7px;height:7px;background:var(--green);border-radius:50%;display:inline-block;animation:pulse 2s infinite;"></span>
-          <span style="font-size:11px;color:var(--muted);font-weight:600;" id="online-count">24 çevrimiçi</span>
+          <span style="font-size:11px;color:var(--muted);font-weight:600;" id="online-count">... çevrimiçi</span>
         </div>
         <div class="home-avatar" id="homeAvatar" onclick="navTo('profile')">🧑</div>
       </div>
@@ -887,9 +887,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <div class="profile-loc">📍 Konya, Türkiye</div>
       </div>
       <div class="stats-row">
-        <div class="stat-item"><div class="stat-num">24</div><div class="stat-label">Oyun</div></div>
-        <div class="stat-item"><div class="stat-num">4.8</div><div class="stat-label">Puan</div></div>
-        <div class="stat-item"><div class="stat-num">12</div><div class="stat-label">Arkadaş</div></div>
+        <div class="stat-item" onclick="showGameHistory()" style="cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background='var(--card)'"><div class="stat-num" id="stat-games">—</div><div class="stat-label">Oyun</div></div>
+        <div class="stat-item" style="cursor:default;"><div class="stat-num" id="stat-rating">—</div><div class="stat-label">Puan</div></div>
+        <div class="stat-item" onclick="showFriendsModal()" style="cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background='var(--card)'"><div class="stat-num" id="stat-friends">—</div><div class="stat-label">Arkadaş</div></div>
       </div>
       <div class="profile-section">
         <div class="xp-bar-wrap">
@@ -1500,7 +1500,12 @@ function detailJoin(){
       btn.style.boxShadow='0 12px 32px rgba(42,157,92,0.35)';
       showToast('🎉 Oyuna katıldın! +20 XP','success');
       uStats.games++; addXP(20);
+      // Oyun sayısını güncelle
+      var gEl = document.getElementById('stat-games');
+      if(gEl) gEl.textContent = uStats.games;
       loadGamesFromAPI();
+      // Aktivite listesini yenile
+      setTimeout(function(){ loadActivityList(); }, 500);
       // Rating modalı 5sn sonra aç
       setTimeout(function(){ openRatingForListing(_currentDetailGameId); }, 5000);
     } else {
@@ -1918,6 +1923,164 @@ function logout(){
 // =========== PLAYERS DATA ===========
 const PLAYERS = []; // Gerçek kullanıcılar API'den yüklenir
 
+// =========== OYUN GEÇMİŞİ MODAL ===========
+async function showGameHistory(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  
+  // Modal HTML oluştur
+  var existing = document.getElementById('game-history-modal');
+  if(existing) existing.remove();
+  
+  var modal = document.createElement('div');
+  modal.id = 'game-history-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;display:flex;align-items:flex-end;';
+  modal.innerHTML = '<div style="background:var(--dark2);border-radius:28px 28px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:0 0 40px;" onclick="event.stopPropagation()">'
+    +'<div style="width:40px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:12px auto 0;"></div>'
+    +'<div style="padding:20px 24px 12px;display:flex;align-items:center;justify-content:space-between;">'
+      +'<div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">🎮 Oyun Geçmişim</div>'
+      +'<button onclick="document.getElementById(\'game-history-modal\').remove()" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:6px 12px;color:var(--muted);cursor:pointer;font-size:14px;">✕</button>'
+    +'</div>'
+    +'<div id="gh-content" style="padding:0 24px;"><div style="color:var(--muted);text-align:center;padding:24px;">Yükleniyor...</div></div>'
+  +'</div>';
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/joined-listings');
+    var data = await res.json();
+    var sportIcons = {futbol:'⚽',okey:'🀄',basket:'🏀',basketbol:'🏀',tenis:'🎾',voleybol:'🏐'};
+    var content = document.getElementById('gh-content');
+    var listings = data.listings || [];
+    if(!listings.length){
+      content.innerHTML = '<div style="color:var(--muted);text-align:center;padding:32px;">Henüz hiç oyun yok.<br><span style="font-size:12px;">Bir ilana katılarak başla!</span></div>';
+      return;
+    }
+    content.innerHTML = listings.map(function(l){
+      var icon = sportIcons[l.sport]||'🏅';
+      var d = l.joined_at ? new Date(l.joined_at).toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric'}) : '';
+      var statusColor = l.status==='active' ? 'var(--green)' : l.status==='full' ? 'var(--orange)' : 'var(--muted)';
+      return '<div style="display:flex;gap:12px;padding:12px;background:var(--card);border-radius:14px;margin-bottom:8px;cursor:pointer;border:1px solid var(--border);" onclick="openActivityRating('+l.id+')">'
+        +'<div style="width:44px;height:44px;border-radius:12px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">'+icon+'</div>'
+        +'<div style="flex:1;min-width:0;">'
+          +'<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+( l.description || l.sport+' Oyunu' )+'</div>'
+          +'<div style="font-size:12px;color:var(--muted);margin-top:2px;">📍 '+l.location+'</div>'
+          +'<div style="font-size:11px;color:var(--muted);margin-top:2px;">🏠 '+l.host_name+' · '+d+'</div>'
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">'
+          +'<span style="font-size:11px;font-weight:700;color:'+statusColor+';">'+( l.status==='active'?'Aktif':l.status==='full'?'Tamamlandı':'Bitti' )+'</span>'
+          +'<span style="font-size:11px;color:var(--orange);">⭐ Değerlendir ›</span>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  } catch(e){
+    var c = document.getElementById('gh-content');
+    if(c) c.innerHTML = '<div style="color:var(--muted);text-align:center;padding:24px;">Yüklenemedi</div>';
+  }
+}
+
+// =========== ARKADAŞ MODAL ===========
+async function showFriendsModal(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  
+  var existing = document.getElementById('friends-modal');
+  if(existing) existing.remove();
+  
+  var modal = document.createElement('div');
+  modal.id = 'friends-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;display:flex;align-items:flex-end;';
+  modal.innerHTML = '<div style="background:var(--dark2);border-radius:28px 28px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:0 0 40px;" onclick="event.stopPropagation()">'
+    +'<div style="width:40px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:12px auto 0;"></div>'
+    +'<div style="padding:20px 24px 12px;display:flex;align-items:center;justify-content:space-between;">'
+      +'<div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">🤝 Arkadaşlarım</div>'
+      +'<button onclick="document.getElementById(\'friends-modal\').remove()" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:6px 12px;color:var(--muted);cursor:pointer;font-size:14px;">✕</button>'
+    +'</div>'
+    +'<div id="fm-content" style="padding:0 24px;"><div style="color:var(--muted);text-align:center;padding:24px;">Yükleniyor...</div></div>'
+  +'</div>';
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  
+  try {
+    var res = await fetch(API+'/api/users/'+u.id+'/friendlist');
+    var data = await res.json();
+    var content = document.getElementById('fm-content');
+    var friends = data.friends || [];
+    
+    // Arkadaş sayısını güncelle
+    var fEl = document.getElementById('stat-friends');
+    if(fEl) fEl.textContent = friends.length;
+    
+    if(!friends.length){
+      content.innerHTML = '<div style="color:var(--muted);text-align:center;padding:32px;">Henüz arkadaşın yok.<br><span style="font-size:12px;">Profil sayfasından kullanıcı ara ve istek gönder!</span></div>';
+      return;
+    }
+    content.innerHTML = friends.map(function(f){
+      var av = f.profile_photo
+        ? '<img src="'+f.profile_photo+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;">'
+        : '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--orange),#764ba2);display:flex;align-items:center;justify-content:center;font-size:22px;">👤</div>';
+      var onlineDot = f.is_online 
+        ? '<div style="position:absolute;bottom:0;right:0;width:12px;height:12px;background:#2a9d5c;border-radius:50%;border:2px solid var(--dark2);"></div>' : '';
+      var safeName = (f.name||'').replace(/'/g,"\\'");
+      var fid = f.friendship_id || 0;
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--card);border-radius:14px;margin-bottom:8px;border:1px solid var(--border);">'
+        +'<div style="position:relative;flex-shrink:0;">'+av+onlineDot+'</div>'
+        +'<div style="flex:1;min-width:0;">'
+          +'<div style="font-weight:600;font-size:14px;">'+f.name+'</div>'
+          +'<div style="font-size:12px;color:'+(f.is_online?'#2a9d5c':'var(--muted)')+';">'+(f.is_online?'🟢 Çevrimiçi':'⚫ Çevrimdışı')+'</div>'
+          +(f.location?'<div style="font-size:11px;color:var(--muted);">📍 '+f.location+'</div>':'')
+        +'</div>'
+        +'<div style="display:flex;gap:6px;flex-shrink:0;">'
+          +'<button onclick="openMessageTo('+f.id+',\''+safeName+'\');document.getElementById(\'friends-modal\').remove();" style="padding:8px 14px;background:var(--orange);border:none;border-radius:10px;color:white;font-size:13px;font-weight:700;cursor:pointer;">💬</button>'
+          +(fid?'<button onclick="removeFriendFromModal('+fid+',\''+safeName+'\')" style="padding:8px 10px;background:var(--card2);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-size:13px;cursor:pointer;">✕</button>':'')
+        +'</div>'
+      +'</div>';
+    }).join('');
+  } catch(e){
+    var c = document.getElementById('fm-content');
+    if(c) c.innerHTML = '<div style="color:var(--muted);text-align:center;padding:24px;">Yüklenemedi</div>';
+  }
+}
+
+async function removeFriendFromModal(fid, name){
+  if(!confirm(name+' arkadaşlıktan çıkarılsın mı?')) return;
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  try {
+    var res = await fetch(API+'/api/friendships/'+fid, {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: u.id })
+    });
+    var d = await res.json();
+    if(d.success){ 
+      showToast('✅ Arkadaşlıktan çıkarıldı','success'); 
+      showFriendsModal(); // modal'ı yenile
+      loadFriendsSection();
+    }
+  } catch(e){ showToast('❌ Hata','error'); }
+}
+
+// =========== AKTİVİTEDEN DEĞERLENDİRME ===========
+async function openActivityRating(listingId){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id){ showToast('❌ Giriş yapmalısın!','error'); return; }
+  
+  try {
+    var res = await fetch(API+'/api/listings/'+listingId+'/participants-for-rating?userId='+u.id);
+    var data = await res.json();
+    if(!data.success || !data.participants || !data.participants.length){
+      showToast('Bu oyunda değerlendirilecek oyuncu yok.','error'); 
+      return;
+    }
+    _ratingParticipants = data.participants;
+    _ratingListingId = listingId;
+    openRatingModal(data.participants);
+  } catch(e){ 
+    showToast('❌ Katılımcılar yüklenemedi','error');
+  }
+}
+
+
 // =========== ROZET VERİSİ ===========
 const ALL_BADGES = [
   {e:'🔥',n:'Ateşli',desc:'10 oyun oyna',r:'orange',unlocked:true},
@@ -2226,6 +2389,15 @@ async function submitRatings(){
     await Promise.all(promises).catch(function(){});
     showToast('⭐ Değerlendirmeler kaydedildi! +50 XP','success');
     addXP(50);
+    // Kullanıcının kendi puanını güncelle
+    setTimeout(function(){
+      fetch(API+'/api/users/'+u.id+'/rating').then(r=>r.json()).then(function(rd){
+        if(rd.success){
+          var el = document.getElementById('stat-rating');
+          if(el) el.textContent = parseFloat(rd.avg||0)>0 ? parseFloat(rd.avg).toFixed(1) : '—';
+        }
+      }).catch(function(){});
+    }, 500);
     if(!window._hasRatingBadge){
       window._hasRatingBadge = true;
       setTimeout(function(){ showBadgeToast('🤝','Değerlendirici','İlk oyuncu değerlendirmeni yaptın!','🎉 Yeni Rozet!'); }, 800);
@@ -2284,14 +2456,14 @@ goToHome = function(){
   fetch(API+'/api/stats').then(r=>r.json()).then(function(d){
     var onEl=document.getElementById('online-count');
     if(onEl) onEl.textContent=(d.onlineUsers||0)+' çevrimiçi';
-    // Her 60 saniyede bir güncelle
+    // Her 30 saniyede bir güncelle
     clearInterval(window._onlineCountInterval);
     window._onlineCountInterval = setInterval(function(){
       fetch(API+'/api/stats').then(r=>r.json()).then(function(dd){
         var el=document.getElementById('online-count');
         if(el) el.textContent=(dd.onlineUsers||0)+' çevrimiçi';
       }).catch(function(){});
-    }, 60000);
+    }, 30000);
   }).catch(function(){});
   if(window._justRegistered){
     window._justRegistered = false;
@@ -2351,10 +2523,13 @@ async function loadRealProfileStats(){
     var data = await res.json();
     if(data.success){
       var st = data.stats;
-      var items = document.querySelectorAll('.stat-item .stat-num');
-      if(items[0]) items[0].textContent = (st.gamesJoined||0) + (st.gamesCreated||0);
-      if(items[1]) items[1].textContent = st.ratingAvg > 0 ? parseFloat(st.ratingAvg).toFixed(1) : '—';
-      if(items[2]) items[2].textContent = st.friends||0;
+      var totalGames = (st.gamesJoined||0);
+      var el0 = document.getElementById('stat-games');
+      var el1 = document.getElementById('stat-rating');
+      var el2 = document.getElementById('stat-friends');
+      if(el0) el0.textContent = totalGames;
+      if(el1) el1.textContent = st.ratingAvg > 0 ? parseFloat(st.ratingAvg).toFixed(1) : '—';
+      if(el2) el2.textContent = st.friends||0;
       uStats.games = st.gamesJoined||0;
       uStats.created = st.gamesCreated||0;
       saveStats();
@@ -2375,7 +2550,6 @@ async function loadActivityList(){
   if(!actList) return;
   actList.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yükleniyor...</div>';
   try {
-    // Katıldığım + oluşturduğum ilanlar
     var [joinedRes, createdRes] = await Promise.all([
       fetch(API+'/api/users/'+u.id+'/joined-listings'),
       fetch(API+'/api/users/'+u.id+'/my-listings')
@@ -2387,29 +2561,35 @@ async function loadActivityList(){
     var items = [];
     
     (joined.listings||[]).forEach(function(l){
-      items.push({ sport:l.sport, title:l.description||l.sport+' Oyunu', location:l.location,
-        date:l.joined_at, badge:'Katıldı', badgeColor:'rgba(42,157,92,0.12)', badgeText:'#4caf8e' });
+      items.push({ id:l.id, sport:l.sport, title:l.description||l.sport+' Oyunu', location:l.location,
+        date:l.joined_at, badge:'Katıldı', badgeColor:'rgba(42,157,92,0.12)', badgeText:'#4caf8e', canRate:true });
     });
     (created.listings||[]).forEach(function(l){
-      items.push({ sport:l.sport, title:l.description||l.sport+' Oyunu', location:l.location,
-        date:l.created_at, badge:'Oluşturdu', badgeColor:'rgba(255,92,26,0.12)', badgeText:'var(--orange)' });
+      // Eğer joined listede yoksa ekle (duplicate önle)
+      if(!items.find(function(i){ return i.id===l.id; })){
+        items.push({ id:l.id, sport:l.sport, title:l.description||l.sport+' Oyunu', location:l.location,
+          date:l.created_at, badge:'Oluşturdu', badgeColor:'rgba(255,92,26,0.12)', badgeText:'var(--orange)', canRate:true });
+      }
     });
     items.sort(function(a,b){ return new Date(b.date)-new Date(a.date); });
-    items = items.slice(0, 8);
+    items = items.slice(0, 12);
 
     if(!items.length){
-      actList.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Henüz aktivite yok</div>';
+      actList.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px;">Henüz aktivite yok.<br><span style="font-size:11px;">Bir oyuna katıl veya oluştur!</span></div>';
       return;
     }
     actList.innerHTML = items.map(function(it){
       var icon = sportIcons[it.sport]||'🏅';
       var sportClass = it.sport||'futbol';
       var dateStr = it.date ? new Date(it.date).toLocaleDateString('tr-TR',{day:'numeric',month:'short'}) : '';
-      return '<div class="activity-item">'
-        +'<div class="ai-icon '+sportClass+'">'+icon+'</div>'
-        +'<div class="ai-info"><strong>'+it.title+'</strong><span>'+dateStr+(it.location?' · '+it.location:'')+'</span></div>'
-        +'<div class="ai-badge" style="background:'+it.badgeColor+';color:'+it.badgeText+'">'+it.badge+'</div>'
-        +'</div>';
+      var html = '<div class="activity-item" onclick="openActivityRating(' + it.id + ')" style="cursor:pointer;">';
+      html += '<div class="ai-icon ' + sportClass + '">' + icon + '</div>';
+      html += '<div class="ai-info"><strong>' + it.title + '</strong><span>' + dateStr + (it.location ? ' · ' + it.location : '') + '</span></div>';
+      html += '<div style="display:flex;align-items:center;gap:6px;">';
+      html += '<div class="ai-badge" style="background:' + it.badgeColor + ';color:' + it.badgeText + '">' + it.badge + '</div>';
+      html += '<span style="font-size:14px;color:var(--muted)">›</span>';
+      html += '</div></div>';
+      return html;
     }).join('');
   } catch(e){
     actList.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yüklenemedi</div>';
@@ -2866,8 +3046,8 @@ function refreshProfileStats(){
   if(xpFill) xpFill.style.width=pct+'%';
   if(xpLvl) xpLvl.textContent=uStats.level;
   if(xpPts) xpPts.textContent=uStats.xp.toLocaleString('tr-TR')+' / '+lt.toLocaleString('tr-TR')+' XP';
-  var g1=document.querySelector('.stat-item:nth-child(1) .stat-num'); if(g1) g1.textContent=uStats.games;
-  var g3=document.querySelector('.stat-item:nth-child(3) .stat-num'); if(g3) g3.textContent=uStats.created;
+  var g1=document.getElementById('stat-games'); if(g1) g1.textContent=uStats.games;
+  var g3=document.getElementById('stat-friends'); if(g3) g3.textContent=uStats.created;
 }
 
 
