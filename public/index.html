@@ -777,7 +777,18 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         </div>
         <div>
           <label class="input-label">Konum</label>
-          <div class="input-wrapper"><span class="input-icon">📍</span><input type="text" id="create-loc" class="input-field" placeholder="Adres veya yer adı"></div>
+          <div class="input-wrapper" style="position:relative;">
+            <span class="input-icon">📍</span>
+            <input type="text" id="create-loc" class="input-field" placeholder="Adres veya yer adı yaz..." oninput="searchCreateLocation(this.value)" autocomplete="off">
+            <button onclick="getCreateLocationGPS()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:var(--orange);border:none;border-radius:8px;color:white;font-size:11px;padding:5px 8px;cursor:pointer;font-weight:700;" title="GPS ile konumumu kullan">📡 GPS</button>
+          </div>
+          <div id="create-loc-suggestions" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:12px;margin-top:4px;overflow:hidden;max-height:180px;overflow-y:auto;z-index:50;position:relative;"></div>
+          <!-- Seçilen konum harita önizleme -->
+          <div id="create-map-preview" style="display:none;margin-top:8px;border-radius:12px;overflow:hidden;height:120px;border:1px solid var(--border);">
+            <iframe id="create-map-iframe" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>
+          </div>
+          <input type="hidden" id="create-lat">
+          <input type="hidden" id="create-lng">
           <div class="field-error" id="err-create-loc">Konum boş bırakılamaz.</div>
         </div>
         <div>
@@ -1151,6 +1162,7 @@ async function handleLogin(){
     goTo('home');
     loadGamesFromAPI();
     setTimeout(initHomeMap, 500);
+    startHeartbeat();
   }catch(err){
     setFS('login-pass','error');
     showToast('❌ '+(err.message||'Giriş başarısız'),'error');
@@ -1353,9 +1365,13 @@ function goBack(){
 function navTo(name){
   // Auth koruması - giriş yapılmamışsa auth'a yönlendir
   if(name!=='auth'){
-    var u=JSON.parse(localStorage.getItem('currentUser')||'null');
+    var raw=localStorage.getItem('currentUser');
+    var u=raw?JSON.parse(raw):null;
     if(!u||!u.id){
-      goTo('auth'); return;
+      // Gerçekten logout mu yoksa race condition mu?
+      document.getElementById('screen-'+currentScreen).classList.add('hidden');
+      document.getElementById('screen-auth').classList.remove('hidden');
+      currentScreen='auth'; return;
     }
   }
   document.getElementById('screen-'+currentScreen).classList.add('hidden');
@@ -1460,6 +1476,83 @@ function detailJoin(){
   },1200);
 }
 
+
+// =========== CREATE KONUM ARAMA ===========
+var createLocDebounce = null;
+var createSelectedLat = null, createSelectedLng = null;
+
+function searchCreateLocation(val){
+  var sug = document.getElementById('create-loc-suggestions');
+  if(!val || val.trim().length < 3){ if(sug) sug.style.display='none'; return; }
+  clearTimeout(createLocDebounce);
+  createLocDebounce = setTimeout(async function(){
+    try {
+      var res = await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(val+' Türkiye')+'&format=json&limit=5&accept-language=tr');
+      var data = await res.json();
+      if(!sug) return;
+      if(!data.length){ sug.style.display='none'; return; }
+      sug.style.display='block';
+      sug.innerHTML = '';
+      data.forEach(function(r){
+        var display = r.display_name.split(',').slice(0,3).join(',');
+        var el = document.createElement('div');
+        el.style.cssText = 'padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;font-size:13px;color:#F5F0E8;';
+        el.textContent = '📍 ' + display;
+        el.addEventListener('mouseenter', function(){ this.style.background='#242220'; });
+        el.addEventListener('mouseleave', function(){ this.style.background=''; });
+        (function(lat,lng,name){ el.addEventListener('click', function(){ selectCreateLocation(lat,lng,name); }); })(r.lat,r.lon,display);
+        sug.appendChild(el);
+      });
+    } catch(e){ console.error('Konum arama hatası:',e); }
+  }, 500);
+}
+
+function selectCreateLocation(lat, lng, name){
+  createSelectedLat = lat;
+  createSelectedLng = lng;
+  document.getElementById('create-loc').value = name;
+  document.getElementById('create-lat').value = lat;
+  document.getElementById('create-lng').value = lng;
+  var sug = document.getElementById('create-loc-suggestions');
+  if(sug) sug.style.display='none';
+  // Harita önizleme
+  var preview = document.getElementById('create-map-preview');
+  var iframe = document.getElementById('create-map-iframe');
+  if(preview && iframe){
+    preview.style.display='block';
+    iframe.src = 'https://maps.google.com/maps?q='+lat+','+lng+'&z=16&output=embed&hl=tr';
+  }
+}
+
+function getCreateLocationGPS(){
+  if(!navigator.geolocation){ showToast('❌ GPS desteklenmiyor','error'); return; }
+  showToast('📡 GPS konum alınıyor...','success');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat = pos.coords.latitude, lng = pos.coords.longitude;
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&accept-language=tr')
+      .then(r=>r.json()).then(function(data){
+        var name = '';
+        if(data.address){
+          name = [data.address.road||data.address.neighbourhood, data.address.suburb||data.address.district, data.address.city||data.address.town||data.address.province].filter(Boolean).join(', ');
+        }
+        name = name || data.display_name.split(',').slice(0,3).join(',');
+        selectCreateLocation(lat, lng, name);
+        showToast('📍 Konum alındı!','success');
+      }).catch(function(){
+        selectCreateLocation(lat, lng, lat.toFixed(4)+', '+lng.toFixed(4));
+      });
+  }, function(){ showToast('❌ GPS konumu alınamadı','error'); });
+}
+
+// Create loc suggestions kapat
+document.addEventListener('click', function(e){
+  var input = document.getElementById('create-loc');
+  var sug = document.getElementById('create-loc-suggestions');
+  if(sug && input && !input.contains(e.target) && !sug.contains(e.target)){
+    sug.style.display='none';
+  }
+});
+
 // =========== CREATE ===========
 function selectSport(el,sport){
   document.querySelectorAll('.sport-option').forEach(o=>o.classList.remove('selected'));
@@ -1505,12 +1598,16 @@ function handleCreate(){
   const currentUser = JSON.parse(localStorage.getItem('currentUser')||'{}');
   if(!currentUser.id){ showToast('❌ Giriş yapmalısın!','error'); btn.innerHTML='<span>🚀</span> Oyunu Yayınla'; btn.style.opacity='1'; btn.disabled=false; return; }
 
+  var cLat = document.getElementById('create-lat').value || null;
+  var cLng = document.getElementById('create-lng').value || null;
   fetch(API+'/api/listings', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       userId: currentUser.id,
       sport: selectedSport,
       location: loc,
+      latitude: cLat ? parseFloat(cLat) : null,
+      longitude: cLng ? parseFloat(cLng) : null,
       date: dateVal || new Date().toISOString().split('T')[0],
       time: timeStr,
       duration: 90,
@@ -1523,6 +1620,11 @@ function handleCreate(){
     if(data.success){
       document.getElementById('create-name').value='';
       document.getElementById('create-loc').value='';
+      document.getElementById('create-lat').value='';
+      document.getElementById('create-lng').value='';
+      createSelectedLat=null; createSelectedLng=null;
+      var preview=document.getElementById('create-map-preview');
+      if(preview) preview.style.display='none';
       document.getElementById('create-date').value='';
       document.getElementById('create-time').value='';
       document.querySelector('#screen-create .textarea-field').value='';
@@ -1601,6 +1703,25 @@ function renderGamesList(filterSport){
     list.appendChild(card);
   });
   document.getElementById('game-count').textContent=filtered.length+' oyun';
+  // Haritada ilanları balon olarak göster
+  renderMapPins(filtered);
+}
+
+function renderMapPins(games){
+  // Mevcut özel pinleri temizle
+  document.querySelectorAll('.dynamic-pin').forEach(function(el){ el.remove(); });
+  var mapArea = document.getElementById('home-map-area');
+  if(!mapArea) return;
+  // İlan sayısını harita üzerinde göster
+  var existing = document.getElementById('map-pin-count');
+  if(existing) existing.remove();
+  if(games && games.length > 0){
+    var badge = document.createElement('div');
+    badge.id = 'map-pin-count';
+    badge.style.cssText = 'position:absolute;bottom:10px;right:10px;z-index:10;background:var(--orange);color:white;border-radius:12px;padding:6px 14px;font-size:12px;font-weight:700;font-family:Syne,sans-serif;box-shadow:0 4px 12px rgba(255,92,26,0.4);pointer-events:none;';
+    badge.textContent = games.length + ' ilan yakında';
+    mapArea.appendChild(badge);
+  }
 }
 
 // =========== SEARCH ===========
@@ -1708,7 +1829,11 @@ function logout(){
   if(confirm('Çıkış yapmak istediğinden emin misin?')){
     localStorage.removeItem('probul_email');
     localStorage.removeItem('probul_name');
-    navTo('auth');
+    localStorage.removeItem('currentUser');
+    // navTo yerine goTo - auth korumasını bypass et
+    document.getElementById('screen-'+currentScreen).classList.add('hidden');
+    document.getElementById('screen-auth').classList.remove('hidden');
+    currentScreen='auth'; screenHistory=[];
     document.getElementById('btn-register').innerHTML='<span>🚀</span> Hesap Oluştur';
     document.getElementById('btn-register').disabled=false; document.getElementById('btn-register').style.opacity='1'; document.getElementById('btn-register').style.background='var(--orange)';
     document.getElementById('btn-login').innerHTML='<span>🔑</span> Giriş Yap';
@@ -2143,15 +2268,41 @@ async function loadFriendsSection(){
   var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
   if(!u.id) return;
   loadFriendRequests();
+  var section = document.getElementById('friends-section');
+  if(!section) return;
+  section.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yükleniyor...</div>';
   try {
     var res = await fetch(API+'/api/users/'+u.id+'/friendlist');
     var data = await res.json();
-    var section = document.getElementById('friends-section');
-    if(!section) return;
     if(!data.success || !data.friends || data.friends.length === 0){
       section.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Henüz arkadaşın yok.<br>Yukarıdan kullanıcı ara ve arkadaşlık isteği gönder!</div>';
       return;
     }
+    section.innerHTML = data.friends.map(function(f){
+      var avatar = f.profile_photo 
+        ? '<img src="'+f.profile_photo+'" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">'
+        : '<div style="width:44px;height:44px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid var(--border)">👤</div>';
+      var onlineDot = f.is_online ? '<div style="position:absolute;bottom:0;right:0;width:11px;height:11px;background:var(--green);border-radius:50%;border:2px solid var(--dark2)"></div>' : '';
+      var safeName = (f.name||'').replace(/'/g,"\'");
+      var fid = f.friendship_id || 0;
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">'
+        +'<div style="position:relative;cursor:pointer;" onclick="openMessageTo('+f.id+',\''+safeName+'\')">'
+          +avatar+onlineDot
+        +'</div>'
+        +'<div style="flex:1;cursor:pointer;" onclick="openMessageTo('+f.id+',\''+safeName+'\')"><div style="font-weight:600;font-size:14px">'+f.name+'</div>'
+        +'<div style="font-size:12px;color:var(--muted)">'+(f.is_online?'🟢 Çevrimiçi':'⚫ Çevrimdışı')+'</div></div>'
+        +'<div style="display:flex;gap:6px;">'
+          +'<button onclick="openMessageTo('+f.id+',\''+safeName+'\');" style="padding:6px 12px;background:var(--orange);border:none;border-radius:10px;color:white;font-size:12px;font-weight:700;cursor:pointer;">💬</button>'
+          +(fid?'<button onclick="removeFriend('+fid+',\''+safeName+'\');" style="padding:6px 10px;background:var(--card2);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-size:12px;cursor:pointer;">✕</button>':'')
+        +'</div>'
+        +'</div>';
+    }).join('');
+  } catch(e){ 
+    console.error('Friends error:',e); 
+    var section2 = document.getElementById('friends-section');
+    if(section2) section2.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yüklenirken hata oluştu.</div>';
+  }
+}
 
 async function loadFriendRequests(){
   var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
@@ -2195,11 +2346,11 @@ async function respondFriendReq(friendshipId, action){
   try {
     var res = await fetch(API+'/api/friendships/'+friendshipId, {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action, userId: u.id })
+      body: JSON.stringify({ action: action, userId: u.id })
     });
     var data = await res.json();
     if(data.success){
-      showToast(action==='accept'?'✅ Arkadaşlık kabul edildi!':'✕ İstek reddedildi', action==='accept'?'success':'error');
+      showToast(action==='accept'?'✅ Arkadaşlık kabul edildi!':'İstek reddedildi', action==='accept'?'success':'error');
       loadFriendRequests();
       if(action==='accept') loadFriendsSection();
     }
@@ -2225,13 +2376,14 @@ async function searchUsers(val){
   var resultsEl = document.getElementById('friend-search-results');
   if(!resultsEl) return;
   if(!val || val.trim().length < 2){ resultsEl.style.display='none'; return; }
+  resultsEl.style.display='block';
+  resultsEl.innerHTML='<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center;">Aranıyor...</div>';
   var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(async function(){
     try {
       var res = await fetch(API+'/api/users/search?q='+encodeURIComponent(val)+'&userId='+(u.id||0));
       var data = await res.json();
-      resultsEl.style.display='block';
       if(!data.users || data.users.length === 0){
         resultsEl.innerHTML='<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center;">Kullanıcı bulunamadı</div>';
         return;
@@ -2240,11 +2392,13 @@ async function searchUsers(val){
         var safeName = (user.name||'').replace(/'/g,"\'");
         return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);">'
           +'<div style="width:36px;height:36px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">'+(user.profile_photo?'<img src="'+user.profile_photo+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover">':'👤')+'</div>'
-          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:var(--text)">'+user.name+'</div><div style="font-size:11px;color:var(--muted)">'+(user.location||'')+'</div></div>'
+          +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:var(--text)">'+user.name+'</div><div style="font-size:11px;color:var(--muted)">'+(user.is_online?'🟢 Çevrimiçi':user.location||'')+'</div></div>'
           +'<button onclick="sendFriendRequest('+user.id+',\''+safeName+'\',this)" style="padding:5px 12px;background:var(--orange);border:none;border-radius:8px;color:white;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;">+ Ekle</button>'
           +'</div>';
       }).join('');
-    } catch(e){ console.error('Search error:',e); }
+    } catch(e){ 
+      resultsEl.innerHTML='<div style="padding:12px;color:var(--red);font-size:13px;text-align:center;">Bağlantı hatası</div>';
+    }
   }, 400);
 }
 
@@ -2264,7 +2418,7 @@ async function sendFriendRequest(targetId, targetName, btn){
   try {
     var res = await fetch(API+'/api/users/'+u.id+'/friend-request', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ targetId })
+      body: JSON.stringify({ targetId: targetId })
     });
     var data = await res.json();
     if(data.success){
@@ -2277,23 +2431,6 @@ async function sendFriendRequest(targetId, targetName, btn){
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='+ Ekle'; } showToast('❌ Hata','error'); }
 }
 
-    section.innerHTML = data.friends.map(function(f){
-      var avatar = f.profile_photo 
-        ? '<img src="'+f.profile_photo+'" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">'
-        : '<div style="width:44px;height:44px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid var(--border)">👤</div>';
-      var onlineDot = f.is_online ? '<div style="position:absolute;bottom:0;right:0;width:11px;height:11px;background:var(--green);border-radius:50%;border:2px solid var(--dark2)"></div>' : '';
-      var safeName = (f.name||'').replace(/'/g,"\\'");
-      return '<div onclick="openMessageTo('+f.id+',\''+safeName+'\')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;">'
-        +'<div style="position:relative">'+avatar+onlineDot+'</div>'
-        +'<div style="flex:1">'
-          +'<div style="font-weight:600;font-size:14px">'+f.name+'</div>'
-          +'<div style="font-size:12px;color:var(--muted)">'+( f.is_online ? '🟢 Çevrimiçi' : '⚫ Çevrimdışı' )+'</div>'
-        +'</div>'
-        +'<button onclick="event.stopPropagation();openMessageTo('+f.id+',\''+safeName+'\')" style="padding:7px 14px;background:var(--orange);border:none;border-radius:10px;color:white;font-size:12px;font-weight:700;cursor:pointer;">💬</button>'
-        +'</div>';
-    }).join('');
-  } catch(e){ console.error('Friends error:',e); }
-}
 
 // =========== BİRİNE MESAJ GÖNDER (index içinden) ===========
 function openMessageTo(userId, userName){
@@ -2364,6 +2501,8 @@ async function loadGamesFromAPI(filterSport){
           sport:l.sport, icon:icon,
           host:l.userName||l.user_name||'Oyuncu',
           loc:l.location, dist:'',
+          lat:l.latitude||l.lat||null,
+          lng:l.longitude||l.lng||null,
           time:l.time||'--:--', date:dateStr,
           price:l.notes||'Ücretsiz',
           badge:l.status==='full'?'Dolu':'Açık',
@@ -2404,6 +2543,27 @@ function refreshProfileStats(){
   var g3=document.querySelector('.stat-item:nth-child(3) .stat-num'); if(g3) g3.textContent=uStats.created;
 }
 
+
+
+// =========== ÇEVRIMIÇI HEARTBEAT ===========
+var heartbeatInterval = null;
+function startHeartbeat(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(!u.id) return;
+  // Hemen bir kez gönder
+  fetch(API+'/api/users/'+u.id+'/heartbeat', {method:'POST'}).catch(function(){});
+  // 30 saniyede bir gönder
+  clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(function(){
+    var uu = JSON.parse(localStorage.getItem('currentUser')||'{}');
+    if(uu.id) fetch(API+'/api/users/'+uu.id+'/heartbeat', {method:'POST'}).catch(function(){});
+  }, 30000);
+}
+// Sayfa kapanınca offline yap
+window.addEventListener('beforeunload', function(){
+  var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
+  if(u.id) navigator.sendBeacon(API+'/api/users/'+u.id+'/offline');
+});
 
 // =========== GOOGLE MAPS ===========
 function initHomeMap(){
@@ -2483,6 +2643,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     // Gerçek haritayı başlat
     setTimeout(initHomeMap, 500);
+    startHeartbeat();
   }
 });
 </script>
