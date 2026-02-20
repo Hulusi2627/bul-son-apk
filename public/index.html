@@ -1177,20 +1177,6 @@ async function handleLogin(){
     loadGamesFromAPI();
     setTimeout(initHomeMap, 500);
     startHeartbeat();
-    // Gerçek çevrimiçi sayısını çek
-    fetch(API+'/api/stats').then(function(r){ return r.json(); }).then(function(d){
-      var el = document.getElementById('online-count');
-      if(el) el.textContent = (d.onlineUsers||0) + ' çevrimiçi';
-      clearInterval(window._onlineCountInterval);
-      window._onlineCountInterval = setInterval(function(){
-        fetch(API+'/api/stats').then(function(r){ return r.json(); }).then(function(dd){
-          var el2 = document.getElementById('online-count');
-          if(el2) el2.textContent = (dd.onlineUsers||0) + ' çevrimiçi';
-        }).catch(function(){});
-      }, 30000);
-    }).catch(function(){});
-    // Profil istatistiklerini yükle
-    setTimeout(function(){ loadRealProfileStats(); }, 300);
   }catch(err){
     setFS('login-pass','error');
     showToast('❌ '+(err.message||'Giriş başarısız'),'error');
@@ -1409,11 +1395,6 @@ function navTo(name){
   if(name==='home'){
     loadGamesFromAPI();
     updateNavActive('home');
-    // Çevrimiçi sayısını güncelle
-    fetch(API+'/api/stats').then(function(r){ return r.json(); }).then(function(d){
-      var el = document.getElementById('online-count');
-      if(el) el.textContent = (d.onlineUsers||0) + ' çevrimiçi';
-    }).catch(function(){});
   }
   if(name==='profile'){
     setTimeout(function(){ loadFriendsSection(); loadRealProfileStats(); updateNotifBadge(); }, 100);
@@ -3065,8 +3046,8 @@ function refreshProfileStats(){
   if(xpFill) xpFill.style.width=pct+'%';
   if(xpLvl) xpLvl.textContent=uStats.level;
   if(xpPts) xpPts.textContent=uStats.xp.toLocaleString('tr-TR')+' / '+lt.toLocaleString('tr-TR')+' XP';
-  // NOT: stat-games ve stat-friends artık loadRealProfileStats() API'den doldurur
-  // Sadece XP ve level güncellenir burada
+  var g1=document.getElementById('stat-games'); if(g1) g1.textContent=uStats.games;
+  var g3=document.getElementById('stat-friends'); if(g3) g3.textContent=uStats.created;
 }
 
 
@@ -3170,20 +3151,6 @@ document.addEventListener('DOMContentLoaded', function(){
     // Gerçek haritayı başlat
     setTimeout(initHomeMap, 500);
     startHeartbeat();
-    // Gerçek çevrimiçi sayısını çek
-    fetch(API+'/api/stats').then(function(r){ return r.json(); }).then(function(d){
-      var el = document.getElementById('online-count');
-      if(el) el.textContent = (d.onlineUsers||0) + ' çevrimiçi';
-      clearInterval(window._onlineCountInterval);
-      window._onlineCountInterval = setInterval(function(){
-        fetch(API+'/api/stats').then(function(r){ return r.json(); }).then(function(dd){
-          var el2 = document.getElementById('online-count');
-          if(el2) el2.textContent = (dd.onlineUsers||0) + ' çevrimiçi';
-        }).catch(function(){});
-      }, 30000);
-    }).catch(function(){});
-    // Profil istatistiklerini API'den çek
-    setTimeout(function(){ loadRealProfileStats(); }, 200);
   }
 });
 </script>
