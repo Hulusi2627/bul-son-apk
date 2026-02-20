@@ -925,22 +925,8 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       </div>
       <div class="profile-section">
         <div class="profile-section-title">Son Aktiviteler</div>
-        <div class="activity-list">
-          <div class="activity-item">
-            <div class="ai-icon futbol">⚽</div>
-            <div class="ai-info"><strong>Halısaha Maçı</strong><span>2 gün önce · Konya</span></div>
-            <div class="ai-badge" style="background:rgba(42,157,92,0.12);color:#4caf8e">Katıldı</div>
-          </div>
-          <div class="activity-item">
-            <div class="ai-icon okey">🀄</div>
-            <div class="ai-info"><strong>Okey Oyunu</strong><span>5 gün önce · Karatay</span></div>
-            <div class="ai-badge" style="background:rgba(255,92,26,0.12);color:var(--orange)">Oluşturdu</div>
-          </div>
-          <div class="activity-item">
-            <div class="ai-icon basket">🏀</div>
-            <div class="ai-info"><strong>Sokak Basketbolu</strong><span>1 hafta önce · Selçuklu</span></div>
-            <div class="ai-badge" style="background:rgba(42,157,92,0.12);color:#4caf8e">Katıldı</div>
-          </div>
+        <div class="activity-list" id="activity-list-container">
+          <div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yükleniyor...</div>
         </div>
       </div>
       <div class="profile-section">
@@ -2385,7 +2371,7 @@ async function loadRealProfileStats(){
 async function loadActivityList(){
   var u = JSON.parse(localStorage.getItem('currentUser')||'{}');
   if(!u.id) return;
-  var actList = document.querySelector('.activity-list');
+  var actList = document.getElementById('activity-list-container') || document.querySelector('.activity-list');
   if(!actList) return;
   actList.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px;">Yükleniyor...</div>';
   try {
