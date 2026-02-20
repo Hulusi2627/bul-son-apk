@@ -24,9 +24,9 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1')
     ? false
     : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
-  max: 10
+  connectionTimeoutMillis: 8000,
+  idleTimeoutMillis: 20000,
+  max: 3  // Railway free tier için düşük tut
 });
 
 // Rate limiting
@@ -50,12 +50,25 @@ app.use(cors({
   ],
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
+// Genel istekler için küçük limit
+app.use((req, res, next) => {
+  // Fotoğraf yükleme route'larına 2MB, diğerlerine 100KB
+  const photoRoutes = ['/api/register', '/api/profile/'];
+  const isPhotoRoute = photoRoutes.some(r => req.path.startsWith(r));
+  express.json({ limit: isPhotoRoute ? '2mb' : '100kb' })(req, res, next);
+});
 app.use(limiter);
 app.use(express.static('public'));
 
-// OTP store
+// OTP store - otomatik temizlik ile
 const otpStore = new Map();
+// 10 dakikada bir süresi dolmuş OTP'leri temizle
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of otpStore.entries()) {
+    if (val.expires < now) otpStore.delete(key);
+  }
+}, 10 * 60 * 1000);
 
 // Veritabanı tablolarını oluştur
 async function initDatabase() {
@@ -137,6 +150,19 @@ async function initDatabase() {
         link VARCHAR(255),
         is_read BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Arkadaşlık sistemi
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS friendships (
+        id SERIAL PRIMARY KEY,
+        requester_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        addressee_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(requester_id, addressee_id)
       )
     `);
 
@@ -370,11 +396,18 @@ app.post('/api/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Base64 fotoğrafı DB'ye yazma - sadece URL kabul et (bellek tasarrufu)
+    let photoToSave = null;
+    if (profilePhoto && !profilePhoto.startsWith('data:')) {
+      photoToSave = profilePhoto; // URL ise kaydet
+    }
+    // Base64 ise sil - çok büyük, OOM yapıyor
+
     const result = await pool.query(
       `INSERT INTO users (name, email, phone, password, profile_photo) 
        VALUES ($1, $2, $3, $4, $5) 
        RETURNING id, name, email, phone, profile_photo, is_admin`,
-      [name, email, phone, hashedPassword, profilePhoto || null]
+      [name, email, phone, hashedPassword, photoToSave]
     );
 
     const user = result.rows[0];
@@ -412,7 +445,7 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const result = await pool.query('SELECT id, name, email, phone, password, profile_photo, is_admin, bio, location, favorite_sports FROM users WHERE email = $1', [email]);
     
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'E-posta veya şifre hatalı' });
@@ -522,6 +555,8 @@ app.put('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { name, phone, profilePhoto, bio, location, favoriteSports } = req.body;
+    // Base64 fotoğrafı DB'ye yazma
+    const safePhoto = profilePhoto && !profilePhoto.startsWith('data:') ? profilePhoto : undefined;
 
     const result = await pool.query(
       `UPDATE users 
@@ -529,7 +564,7 @@ app.put('/api/profile/:userId', async (req, res) => {
            location = $5, favorite_sports = $6
        WHERE id = $7
        RETURNING id, name, email, phone, profile_photo, bio, location, favorite_sports`,
-      [name, phone, profilePhoto, bio, location, favoriteSports, userId]
+      [name, phone, safePhoto !== undefined ? safePhoto : null, bio, location, favoriteSports, userId]
     );
 
     if (result.rows.length === 0) {
@@ -765,7 +800,7 @@ app.post('/api/listings/:id/join', async (req, res) => {
     const { id } = req.params;
     const { userId } = req.body;
 
-    const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [id]);
+    const listingResult = await pool.query('SELECT id, user_id, sport, location, latitude, longitude, date, time, player_count, current_players, skill_level, description, notes, status FROM listings WHERE id = $1', [id]);
     
     if (listingResult.rows.length === 0) {
       return res.status(404).json({ error: 'İlan bulunamadı' });
@@ -814,7 +849,7 @@ app.post('/api/listings/:id/join', async (req, res) => {
       `/listings/${id}`
     );
 
-    const updatedListing = await pool.query('SELECT * FROM listings WHERE id = $1', [id]);
+    const updatedListing = await pool.query('SELECT id, user_id, sport, location, date, time, player_count, current_players, status FROM listings WHERE id = $1', [id]);
 
     res.json({
       success: true,
@@ -1427,6 +1462,181 @@ app.get('/api/stats', async (req, res) => {
   } catch (error) {
     console.error('[stats] Hata:', error);
     res.status(500).json({ error: 'İstatistikler getirilemedi' });
+  }
+});
+
+
+// ============================================================
+// HEARTBEAT & ONLINE STATUS
+// ============================================================
+app.post('/api/users/:userId/heartbeat', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    await pool.query(
+      "UPDATE users SET is_online = true, last_seen = CURRENT_TIMESTAMP WHERE id = $1",
+      [userId]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'Heartbeat hatası' }); }
+});
+
+app.post('/api/users/:userId/offline', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    await pool.query(
+      "UPDATE users SET is_online = false, last_seen = CURRENT_TIMESTAMP WHERE id = $1",
+      [userId]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'Offline hatası' }); }
+});
+
+// 5 dakikadır heartbeat göndermeyen kullanıcıları offline yap (her dakika)
+setInterval(async () => {
+  try {
+    await pool.query(
+      "UPDATE users SET is_online = false WHERE is_online = true AND last_seen < NOW() - INTERVAL '5 minutes'"
+    );
+  } catch(e) {}
+}, 60 * 1000);
+
+// ============================================================
+// KULLANICI ARAMA
+// ============================================================
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const { q, userId } = req.query;
+    if (!q || q.trim().length < 2) return res.json({ success: true, users: [] });
+    const result = await pool.query(
+      `SELECT id, name, profile_photo, location, is_online
+       FROM users 
+       WHERE (LOWER(name) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1))
+         AND id != $2 AND is_admin = false
+       ORDER BY is_online DESC, name ASC
+       LIMIT 10`,
+      ['%' + q.trim() + '%', userId || 0]
+    );
+    res.json({ success: true, users: result.rows });
+  } catch (error) {
+    console.error('[user-search] Hata:', error);
+    res.status(500).json({ error: 'Arama hatası' });
+  }
+});
+
+// ============================================================
+// ARKADAŞLIK SİSTEMİ
+// ============================================================
+
+// Arkadaş listesi (kabul edilmiş)
+app.get('/api/users/:userId/friendlist', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.profile_photo, u.location, u.is_online, u.last_seen, f.id as friendship_id
+       FROM friendships f
+       JOIN users u ON (
+         CASE WHEN f.requester_id = $1 THEN f.addressee_id ELSE f.requester_id END = u.id
+       )
+       WHERE (f.requester_id = $1 OR f.addressee_id = $1) AND f.status = 'accepted'
+       ORDER BY u.is_online DESC, u.name ASC`,
+      [userId]
+    );
+    res.json({ success: true, friends: result.rows });
+  } catch (error) {
+    console.error('[friendlist] Hata:', error);
+    res.status(500).json({ error: 'Arkadaşlar getirilemedi' });
+  }
+});
+
+// Gelen arkadaşlık istekleri
+app.get('/api/users/:userId/friend-requests', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      `SELECT f.id as friendship_id, f.requester_id, f.created_at,
+              u.id, u.name, u.profile_photo, u.location, u.is_online
+       FROM friendships f
+       JOIN users u ON f.requester_id = u.id
+       WHERE f.addressee_id = $1 AND f.status = 'pending'
+       ORDER BY f.created_at DESC`,
+      [userId]
+    );
+    res.json({ success: true, requests: result.rows });
+  } catch (error) {
+    console.error('[friend-requests] Hata:', error);
+    res.status(500).json({ error: 'İstekler getirilemedi' });
+  }
+});
+
+// Arkadaşlık isteği gönder
+app.post('/api/users/:userId/friend-request', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { targetId } = req.body;
+    if (!targetId) return res.status(400).json({ error: 'Hedef kullanıcı gerekli' });
+    const existing = await pool.query(
+      'SELECT id, status FROM friendships WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)',
+      [userId, targetId]
+    );
+    if (existing.rows.length > 0) {
+      const fr = existing.rows[0];
+      if (fr.status === 'accepted') return res.json({ success: false, error: 'Zaten arkadaşsınız' });
+      if (fr.status === 'pending') return res.json({ success: false, error: 'İstek zaten gönderildi' });
+      // Rejected ise tekrar gönder
+      await pool.query("UPDATE friendships SET status='pending', requester_id=$1, addressee_id=$2, updated_at=NOW() WHERE id=$3", [userId, targetId, fr.id]);
+      return res.json({ success: true, message: 'İstek gönderildi' });
+    }
+    await pool.query(
+      "INSERT INTO friendships (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')",
+      [userId, targetId]
+    );
+    const senderName = await pool.query('SELECT name FROM users WHERE id=$1', [userId]);
+    await createNotification(targetId, 'friend_request', 'Arkadaşlık İsteği',
+      (senderName.rows[0]?.name || 'Birisi') + ' sana arkadaşlık isteği gönderdi.', null);
+    res.json({ success: true, message: 'İstek gönderildi' });
+  } catch (error) {
+    console.error('[friend-request] Hata:', error);
+    res.status(500).json({ error: 'İstek gönderilemedi' });
+  }
+});
+
+// Arkadaşlık isteği kabul/reddet
+app.put('/api/friendships/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { action, userId } = req.body;
+    const fr = await pool.query('SELECT * FROM friendships WHERE id=$1', [friendshipId]);
+    if (!fr.rows.length) return res.status(404).json({ error: 'İstek bulunamadı' });
+    if (fr.rows[0].addressee_id != userId) return res.status(403).json({ error: 'Yetki yok' });
+    const newStatus = action === 'accept' ? 'accepted' : 'rejected';
+    await pool.query('UPDATE friendships SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, friendshipId]);
+    if (action === 'accept') {
+      const addrName = await pool.query('SELECT name FROM users WHERE id=$1', [userId]);
+      await createNotification(fr.rows[0].requester_id, 'friend_accepted', 'Arkadaşlık Kabul Edildi',
+        (addrName.rows[0]?.name || 'Birisi') + ' arkadaşlık isteğini kabul etti.', null);
+    }
+    res.json({ success: true, status: newStatus });
+  } catch (error) {
+    console.error('[friendship-update] Hata:', error);
+    res.status(500).json({ error: 'Güncelleme hatası' });
+  }
+});
+
+// Arkadaşlıktan çıkar
+app.delete('/api/friendships/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+    const fr = await pool.query('SELECT * FROM friendships WHERE id=$1', [friendshipId]);
+    if (!fr.rows.length) return res.status(404).json({ error: 'İlişki bulunamadı' });
+    if (fr.rows[0].requester_id != userId && fr.rows[0].addressee_id != userId) {
+      return res.status(403).json({ error: 'Yetki yok' });
+    }
+    await pool.query('DELETE FROM friendships WHERE id=$1', [friendshipId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[friendship-delete] Hata:', error);
+    res.status(500).json({ error: 'Silme hatası' });
   }
 });
 
